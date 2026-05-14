@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta name="description" content="HEX-BURST — 色彩と衝撃の再構築。ヘックスグリッド・オートバトラー。" />
+  <meta name="theme-color" content="#0A0A0B" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <title>HEX-BURST</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;900&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/src/styles/main.css" />
+</head>
+<body>
+  <!-- PixiJS Canvas Container -->
+  <div id="game-container"></div>
+
+  <!-- HUD Overlay -->
+  <div id="hud-overlay">
+    <!-- Top Bar: Round / HP / Gold -->
+    <div id="hud-top" class="hud-top glass">
+      <div class="stat-group">
+        <span class="label">ROUND</span>
+        <span id="hud-round" class="value">1</span>
+      </div>
+      <div class="stat-divider"></div>
+      <div class="stat-group">
+        <span class="label">LVL</span>
+        <span id="hud-level" class="value">1</span>
+      </div>
+      <div class="stat-group xp-group">
+        <div id="hud-xp-bar" class="xp-bar-bg">
+          <div id="hud-xp-fill" class="xp-bar-fill"></div>
+        </div>
+        <span id="hud-xp-text" class="xp-text">0/2</span>
+      </div>
+      <div class="stat-divider"></div>
+      <div class="stat-group">
+        <span class="label">HP</span>
+        <span id="hud-hp" class="value hp">100</span>
+      </div>
+      <div class="stat-divider"></div>
+      <div class="stat-group">
+        <span class="label">GOLD</span>
+        <span id="hud-gold" class="value gold">10</span>
+      </div>
+    </div>
+
+    <!-- Battle Banner -->
+    <div id="battle-banner" class="battle-banner">VICTORY</div>
+
+    <!-- Shop Overlay -->
+    <div id="shop-container" class="shop-container">
+      <div class="shop-controls">
+        <button id="btn-buy-xp" class="btn-shop buy-xp">
+          <span class="label">BUY XP</span>
+          <span class="cost">4G</span>
+        </button>
+        <button id="btn-reroll" class="btn-shop reroll">
+          <span class="label">REROLL</span>
+          <span class="cost">2G</span>
+        </button>
+      </div>
+      
+      <div id="shop-cards" class="shop-cards">
+        <!-- Unit cards will be injected here -->
+      </div>
+
+      <button id="btn-battle" class="btn-battle glass-btn">
+        <span class="icon">▶</span> BATTLE
+      </button>
+    </div>
+
+    <!-- Battle Result Banner -->
+    <div class="battle-banner" id="battle-banner"></div>
+  </div>
+
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>
