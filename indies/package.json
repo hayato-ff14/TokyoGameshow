@@ -2,7 +2,7 @@
   "name": "indies",
   "version": "0.0.0",
   "private": true,
-  "homepage": "https://hayato-ff14.github.io/TokyoGameshow/",
+  "homepage": "https://tokyo-gameshow.vercel.app/",
   "type": "module",
   "scripts": {
     "dev": "vite",
