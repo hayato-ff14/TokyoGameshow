@@ -1411,12 +1411,9 @@ const BG_COLOR = 0x050508;
           showAreaTransitionOverlay(true);
           return;
         } else {
-          // ボス撃破：HP全回復 & +100G & エリア2/3の新マップ生成！
-          combatEngine.playerHP = combatEngine.playerMaxHP;
-          playerGold += 100;
-          currentDepth = 0;
-          currentNodeId = null;
-          generateMap();
+          // エリア1→2, エリア2→3: エリアクリア画面を表示してから次のマップへ遷移
+          showAreaTransitionOverlay(false);
+          return;
         }
       }
     } catch (err) {
