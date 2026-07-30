@@ -2,7 +2,7 @@
   "name": "indies",
   "version": "0.0.0",
   "private": true,
-  "homepage": "https://tokyo-gameshow.vercel.app/",
+  "homepage": "https://overclock-overload.vercel.app/",
   "type": "module",
   "scripts": {
     "dev": "vite",
