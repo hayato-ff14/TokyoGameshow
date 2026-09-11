@@ -2,7 +2,7 @@
  * CardSprite.js - カードのビジュアル表現（描画専用・操作ロジックはmain.jsで管理）
  */
 
-import { Container, Graphics, Text, TextStyle, Rectangle } from 'pixi.js';
+import { Container, Graphics, Text, TextStyle, Rectangle, Sprite, Assets } from 'pixi.js';
 import { gsap } from 'gsap';
 
 export class CardSprite {
@@ -52,39 +52,57 @@ export class CardSprite {
     };
     const cardColor = typeColors[this.data.type] || 0x00F5FF;
 
-    // 1. カード背景 (ダークグラデーション)
+    // 1. カード背景 (ダークサイバーガラス)
     gfx.roundRect(-this.cardWidth / 2, -this.cardHeight / 2, this.cardWidth, this.cardHeight, 12);
     gfx.fill({ color: 0x0B0F19, alpha: 0.96 });
 
-    // 2. 外枠 (タイプ別の発光ライン)
+    // 2. メタリック外枠 (タイプ別の立体発光ライン)
     gfx.roundRect(-this.cardWidth / 2, -this.cardHeight / 2, this.cardWidth, this.cardHeight, 12);
-    gfx.stroke({ color: cardColor, width: 2, alpha: 0.9 });
+    gfx.stroke({ color: cardColor, width: 3, alpha: 0.95 });
 
-    // 内側ダブルライン
-    gfx.roundRect(-this.cardWidth / 2 + 4, -this.cardHeight / 2 + 4, this.cardWidth - 8, this.cardHeight - 8, 10);
-    gfx.stroke({ color: cardColor, width: 1, alpha: 0.25 });
+    // 内側メタリックダブルライン
+    gfx.roundRect(-this.cardWidth / 2 + 5, -this.cardHeight / 2 + 5, this.cardWidth - 10, this.cardHeight - 10, 9);
+    gfx.stroke({ color: 0xFFFFFF, width: 1, alpha: 0.4 });
 
     // 3. タイトルバー
     gfx.roundRect(-this.cardWidth / 2 + 10, -this.cardHeight / 2 + 32, this.cardWidth - 20, 24, 4);
-    gfx.fill({ color: cardColor, alpha: 0.12 });
-    gfx.stroke({ color: cardColor, width: 1, alpha: 0.4 });
-
-    // 4. アート枠 (イラスト領域)
-    const artY = -22;
-    const artW = this.cardWidth - 24;
-    const artH = 68;
-    gfx.roundRect(-artW / 2, artY - artH / 2, artW, artH, 6);
-    gfx.fill({ color: 0x050810, alpha: 0.9 });
+    gfx.fill({ color: cardColor, alpha: 0.18 });
     gfx.stroke({ color: cardColor, width: 1.5, alpha: 0.6 });
 
-    // カード1枚1枚の専用ベクターアートを描画
-    this.drawCardArt(gfx, artY, artW, artH);
+    // 4. アート枠 (イラスト領域)
+    const artY = -20;
+    const artW = this.cardWidth - 24;
+    const artH = 74;
+    gfx.roundRect(-artW / 2, artY - artH / 2, artW, artH, 6);
+    gfx.fill({ color: 0x050810, alpha: 0.95 });
+    gfx.stroke({ color: cardColor, width: 2, alpha: 0.8 });
 
-    // コストバッジ (左上)
-    gfx.circle(-this.cardWidth / 2 + 18, -this.cardHeight / 2 + 18, 14);
+    // カード画像スプライトの読み込み＆配置
+    let artUrl = '/assets/cards/card_strike.png';
+    if (this.data.type === 'skill') artUrl = '/assets/cards/card_defend.png';
+    if (this.data.type === 'buff') artUrl = '/assets/cards/card_boost.png';
+    if (this.data.id.includes('SCAN') || this.data.id.includes('RECYCLE') || this.data.id.includes('DRAW')) artUrl = '/assets/cards/card_scan.png';
+    if (this.data.id.includes('WHIRLWIND') || this.data.id.includes('SUPERNOVA') || this.data.id.includes('EMP') || this.data.id.includes('CHAIN')) artUrl = '/assets/cards/card_aoe.png';
+
+    Assets.load(artUrl).then(texture => {
+      if (texture && !this.container.destroyed) {
+        if (!this.artSprite) {
+          this.artSprite = new Sprite(texture);
+          this.artSprite.anchor.set(0.5, 0.5);
+          this.artSprite.x = 0;
+          this.artSprite.y = artY;
+          this.artSprite.width = artW - 4;
+          this.artSprite.height = artH - 4;
+          this.container.addChildAt(this.artSprite, 1);
+        }
+      }
+    }).catch(e => console.warn("Card art load fallback:", e));
+
+    // コストバッジ (左上クリスタル)
+    gfx.circle(-this.cardWidth / 2 + 18, -this.cardHeight / 2 + 18, 15);
     gfx.fill({ color: 0x0A0F1D, alpha: 0.95 });
-    gfx.circle(-this.cardWidth / 2 + 18, -this.cardHeight / 2 + 18, 14);
-    gfx.stroke({ color: 0x00F5FF, width: 2, alpha: 0.9 });
+    gfx.circle(-this.cardWidth / 2 + 18, -this.cardHeight / 2 + 18, 15);
+    gfx.stroke({ color: 0x00F5FF, width: 2.5, alpha: 0.95 });
 
     // CLOCKバッジ (右上)
     gfx.roundRect(this.cardWidth / 2 - 38, -this.cardHeight / 2 + 6, 32, 22, 4);
@@ -130,7 +148,7 @@ export class CardSprite {
     this.descText = new Text({ text: this.data.desc, style: descStyle });
     this.descText.anchor.set(0.5, 0);
     this.descText.x = 0;
-    this.descText.y = 22;
+    this.descText.y = 24;
     this.container.addChild(this.descText);
 
     // クラスバッジ (カード下部)
@@ -150,7 +168,7 @@ export class CardSprite {
     // コストテキスト (左上)
     const costStyle = new TextStyle({
       fontFamily: 'JetBrains Mono',
-      fontSize: 14,
+      fontSize: 15,
       fontWeight: '900',
       fill: 0x00F5FF
     });

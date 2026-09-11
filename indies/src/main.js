@@ -4,7 +4,7 @@
  * シーン遷移: TITLE -> CHARACTER_SELECT -> MAP -> COMBAT / SHOP / EVENT
  */
 
-import { Application, Container, Graphics, Sprite, Texture, Text } from 'pixi.js';
+import { Application, Container, Graphics, Sprite, Texture, Text, Assets } from 'pixi.js';
 import { BloomFilter } from 'pixi-filters';
 import { gsap } from 'gsap';
 import { DeckManager, CARD_DEFS, getAvailableCardsForCharacter } from './core/DeckManager.js';
@@ -14,6 +14,8 @@ import { CardSprite } from './objects/CardSprite.js';
 import { EntitySprite } from './objects/EntitySprite.js';
 import { CyberFX } from './fx/CyberFX.js';
 import { CHARACTER_DEFS } from './core/CharacterData.js';
+import { getAugmentsForCharacter, getAugmentSelectionPool } from './core/AugmentData.js';
+import { AudioManager } from './core/AudioManager.js';
 import './styles/main.css';
 
 // Service Worker の強力な古いキャッシュを自動アンインストールして最新コードを読み込ませる
@@ -111,6 +113,7 @@ const BG_COLOR = 0x050508;
   const deckManager = new DeckManager();
   const combatEngine = new CombatEngine(deckManager);
   const fx = new CyberFX(fxLayer);
+  const audioManager = new AudioManager();
 
   // ══════════════════════════════════════════════
   // DOM 要素の参照
@@ -125,6 +128,8 @@ const BG_COLOR = 0x050508;
   // ══════════════════════════════════════════════
   // シーン管理 & 画面遷移
   // ══════════════════════════════════════════════
+  const restScreen = document.getElementById('rest-screen');
+
   function showScene(scene) {
     currentScene = scene;
 
@@ -134,6 +139,7 @@ const BG_COLOR = 0x050508;
     mapScreen.style.display = 'none';
     shopScreen.style.display = 'none';
     eventScreen.style.display = 'none';
+    if (restScreen) restScreen.style.display = 'none';
 
     // すべてのモーダルダイアログを強制的かつ確実に非表示化
     const dr = document.getElementById('draft-overlay'); if (dr) dr.style.display = 'none';
@@ -172,6 +178,10 @@ const BG_COLOR = 0x050508;
         eventScreen.style.display = 'flex';
         openEventUI();
         break;
+      case 'REST':
+        if (restScreen) restScreen.style.display = 'flex';
+        openRestUI();
+        break;
       case 'COMBAT':
         // 戦闘時はHUDとPixiJSのみ表示
         break;
@@ -200,12 +210,14 @@ const BG_COLOR = 0x050508;
   function goToCombat(nodeId) {
     currentNodeId = nodeId;
     const node = findNodeById(nodeId);
-    currentDepth = node.depth;
+    if (node) currentDepth = node.depth;
 
     showScene('COMBAT');
 
-    if (node.type === 'boss') {
+    if (node && node.type === 'boss') {
       startBossCombat();
+    } else if (node && node.type === 'elite') {
+      startEliteCombat(nodeId);
     } else {
       startNormalCombat();
     }
@@ -220,6 +232,57 @@ const BG_COLOR = 0x050508;
   // ══════════════════════════════════════════════
   // キャラクター選択
   // ══════════════════════════════════════════════
+  function showAugmentSelectionUI(charId, onSelect) {
+    const overlay = document.getElementById('augment-overlay');
+    const container = document.getElementById('augment-cards-container');
+    if (!overlay || !container) {
+      if (onSelect) onSelect();
+      return;
+    }
+
+    container.innerHTML = '';
+    const activeIds = (combatEngine.activeAugments || []).map(a => a.id);
+    const pool = getAugmentSelectionPool(charId, activeIds);
+
+    if (pool.length === 0) {
+      if (onSelect) onSelect();
+      return;
+    }
+
+    pool.forEach(aug => {
+      const cardEl = document.createElement('div');
+      cardEl.className = 'augment-card-ui glass';
+      cardEl.style.borderColor = aug.color;
+
+      const actNum = (combatEngine.activeAugments?.length || 0) + 1;
+
+      cardEl.innerHTML = `
+        <div class="augment-tier-badge" style="background: ${aug.color};">
+          AREA 0${actNum} PROTOCOL
+        </div>
+        <div class="augment-icon">${aug.icon}</div>
+        <h3 class="augment-name" style="color: ${aug.color};">${aug.name}</h3>
+        <div class="augment-title">${aug.title}</div>
+        <p class="augment-desc">${aug.desc}</p>
+        <button class="btn-neon augment-select-btn" style="border-color: ${aug.color}; color: ${aug.color}; margin-top: 12px; font-size: 11px;">
+          EQUIP HERO PROTOCOL
+        </button>
+      `;
+
+      cardEl.addEventListener('click', () => {
+        audioManager.playSfx('overclock');
+        combatEngine.addAugment(aug);
+        overlay.style.display = 'none';
+        updateHUD();
+        if (onSelect) onSelect();
+      });
+
+      container.appendChild(cardEl);
+    });
+
+    overlay.style.display = 'flex';
+  }
+
   function populateCharacterSelect() {
     const grid = document.getElementById('charselect-grid');
     grid.innerHTML = '';
@@ -249,7 +312,10 @@ const BG_COLOR = 0x050508;
       `;
 
       card.addEventListener('click', () => {
-        goToMap(char);
+        audioManager.playSfx('click');
+        showAugmentSelectionUI(char.id, () => {
+          goToMap(char);
+        });
       });
 
       grid.appendChild(card);
@@ -262,10 +328,11 @@ const BG_COLOR = 0x050508;
 
   // ドローイベント
   combatEngine.onCardDraw = (cardData) => {
+    audioManager.playSfx('card_draw');
     syncHandSprites();
   };
 
-  // カードプレイイベント（カード種別ごとの専用アニメーション）
+  // カードプレイイベント（カード種別ごとの専用アニメーション ＆ SE再生）
   const AOE_CARD_IDS_FX = ['BUFFER_OVERFLOW', 'WHIRLWIND_SLASH', 'BLADE_STORM', 'CHAIN_LIGHTNING', 'SUPERNOVA', 'EMP_WAVE'];
   const HEAL_CARD_IDS = ['SYSTEM_RESTORE', 'OVERHEAL_BARRIER', 'HOLY_COMPILER'];
   
@@ -293,24 +360,34 @@ const BG_COLOR = 0x050508;
 
     if (HEAL_CARD_IDS.includes(cardData.id)) {
       // ═══ 回復カード ═══
+      audioManager.playSfx('heal');
       playerSprite.playHealAnim();
       fx.spawnHealParticles(px, py);
 
     } else if (AOE_CARD_IDS_FX.includes(cardData.id)) {
       // ═══ AOE全体攻撃カード ═══
-      playerSprite.playAOEAnim();
+      if (isSwordsman) {
+        audioManager.playSfx('slash');
+        playerSprite.playWhirlwindSpinAnim();
+      } else {
+        audioManager.playSfx('magic');
+        playerSprite.playSpellSurgeAnim();
+      }
 
       if (cardData.id === 'SUPERNOVA') {
         // 超新星爆発: 全画面中央で黄金プラズマ球体が急速膨張！
+        audioManager.playSfx('overclock');
         fx.spawnSupernovaEffect(1470, 480);
         fx.screenShake(worldContainer, 8, 0.4);
       } else if (cardData.id === 'CHAIN_LIGHTNING') {
         // 連鎖雷撃: プレイヤーの手から全敵へジグザグサンダーが駆け巡る！
+        audioManager.playSfx('magic');
         const aliveSprites = enemySprites.filter(s => s.core.hp > 0);
         fx.spawnChainLightningEffect(px + 40, py - 30, aliveSprites);
         fx.screenShake(worldContainer, 5, 0.25);
       } else if (cardData.id === 'EMP_WAVE') {
         // EMPパルス: プレイヤー足元から同心円状の立体パルス波が拡散！
+        audioManager.playSfx('overclock');
         fx.spawnEMPWaveEffect(px, py + 40);
         fx.screenShake(worldContainer, 6, 0.3);
       } else {
@@ -327,31 +404,61 @@ const BG_COLOR = 0x050508;
       }
 
     } else if (cardData.type === 'attack') {
-      // ═══ 通常攻撃カード ═══
+      // ═══ 単体攻撃カード（技の軽重・属性によりモーション分岐） ═══
+      const isFastAttack = cardData.cost <= 0 || cardData.id.includes('QUICK') || cardData.id.includes('EXPLOIT');
+      const isHeavyAttack = cardData.cost >= 2 || cardData.id.includes('HEAVY') || cardData.id.includes('STRIKE');
+
       if (isSwordsman) {
-        // 剣士：斬撃アニメーション
-        playerSprite.playSlashAnim();
-        setTimeout(() => {
-          fx.spawnSlashArc(targetX, targetY, 0xFF007A);
-        }, 220);
+        audioManager.playSfx('slash');
+        if (isFastAttack) {
+          // 高速刺突・疾走一閃
+          playerSprite.playQuickThrustAnim();
+          setTimeout(() => {
+            fx.spawnSlashArc(targetX, targetY, 0x00F5FF);
+          }, 90);
+        } else if (isHeavyAttack) {
+          // 跳躍叩きつけ重撃
+          playerSprite.playHeavySlamAnim();
+          setTimeout(() => {
+            fx.spawnSlashArc(targetX, targetY, 0xFF007A);
+            fx.spawnGroundImpact(targetX, targetY + 30, 0xFF007A);
+          }, 260);
+        } else {
+          // 通常一閃
+          playerSprite.playQuickThrustAnim();
+          setTimeout(() => {
+            fx.spawnSlashArc(targetX, targetY, 0xFF007A);
+          }, 150);
+        }
       } else {
-        // メイジ：魔法弾アニメーション
-        playerSprite.playMagicAnim();
+        // メイジ：魔術波スペル
+        audioManager.playSfx('magic');
+        playerSprite.playSpellSurgeAnim();
         setTimeout(() => {
           fx.spawnMagicProjectile(px + 60, py - 20, targetX, targetY, 0xA855F7);
         }, 280);
       }
 
     } else if (cardData.type === 'skill') {
-      // ═══ スキルカード（シールド系） ═══
-      playerSprite.playShieldAnim();
-      fx.spawnShieldBarrier(px + 30, py);
-      fx.spawnNeonSparks(px, py, 0x00F5FF, 12);
+      // ═══ スキルカード（シールド / ハックユーティリティ） ═══
+      if (cardData.id.includes('SCAN') || cardData.id.includes('DRAW') || cardData.id.includes('RECYCLE')) {
+        // ハック・スキャンステーション演出
+        audioManager.playSfx('card_draw');
+        playerSprite.playScanHackAnim();
+        fx.spawnNeonSparks(px + 40, py - 20, 0x00F5FF, 16);
+      } else {
+        // シールド防御姿勢
+        audioManager.playSfx('shield');
+        playerSprite.playBarrierLockAnim();
+        fx.spawnShieldBarrier(px + 30, py);
+        fx.spawnNeonSparks(px, py, 0x00F5FF, 14);
+      }
 
     } else {
-      // ═══ バフカード ═══
-      playerSprite.playBuffAnim();
-      fx.spawnNeonSparks(px, py, 0xFFF000, 25);
+      // ═══ パワー・バフカード ═══
+      audioManager.playSfx('overclock');
+      playerSprite.playPowerUpAnim();
+      fx.spawnNeonSparks(px, py - 20, 0xFFF000, 30);
     }
 
     updateHUD();
@@ -359,6 +466,7 @@ const BG_COLOR = 0x050508;
 
   // プレイヤー被弾イベント
   combatEngine.onPlayerDamage = (amount) => {
+    audioManager.playSfx('attack');
     if (playerSprite) {
       playerSprite.playDamageAnim();
       fx.spawnPopupText(playerSprite.container.x, playerSprite.container.y - 60, `-${amount}`, 0xFF007A);
@@ -369,6 +477,7 @@ const BG_COLOR = 0x050508;
 
   // プレイヤー回復イベント
   combatEngine.onPlayerHeal = (amount) => {
+    audioManager.playSfx('heal');
     if (playerSprite) {
       playerSprite.playHealAnim();
       fx.spawnPopupText(playerSprite.container.x, playerSprite.container.y - 60, `+${amount} HP`, 0x00FF88);
@@ -400,6 +509,7 @@ const BG_COLOR = 0x050508;
 
   // オーバークロックトリガーイベント
   combatEngine.onOverclockTrigger = (isPending = false) => {
+    audioManager.playSfx('overclock');
     const banner = document.getElementById('battle-banner');
     const octType = selectedCharacter?.overclockType;
 
@@ -413,7 +523,7 @@ const BG_COLOR = 0x050508;
         banner.className = "battle-banner active";
         fx.flashScreen(BASE_W, BASE_H, 0xFF007A);
       } else if (octType === 'doubleEffect') {
-        banner.textContent = "OVERCLOCK ACTIVE (SPELL POWER x2)";
+        banner.textContent = "OVERCLOCK ACTIVE (ALL CARD EFFECTS x2!)";
         banner.className = "battle-banner active";
         fx.flashScreen(BASE_W, BASE_H, 0xA855F7);
       } else {
@@ -482,6 +592,41 @@ const BG_COLOR = 0x050508;
   // ══════════════════════════════════════════════
   function drawBattleBackground() {
     bgLayer.removeChildren();
+
+    try {
+      // 追加のサイバーグリッド床＆アンビエントネオングロー
+      const floorGrid = new Graphics();
+      floorGrid.ellipse(BASE_W / 2, 750, 850, 180);
+      floorGrid.fill({ color: 0x00F5FF, alpha: 0.05 });
+      floorGrid.stroke({ color: 0x00F5FF, width: 2, alpha: 0.3 });
+
+      floorGrid.ellipse(BASE_W / 2, 750, 500, 100);
+      floorGrid.stroke({ color: 0xFF007A, width: 1.5, alpha: 0.4 });
+      bgLayer.addChild(floorGrid);
+
+      // パルスアニメーション
+      gsap.to(floorGrid, {
+        alpha: 0.7,
+        duration: 2.0,
+        repeat: -1,
+        yoyo: true,
+        ease: 'sine.inOut'
+      });
+
+      // 非同期アセット読み込みによる背景スプライトの追加
+      Assets.load('/assets/cyber_battle_bg.png').then((texture) => {
+        if (texture && !bgLayer.destroyed) {
+          const bgSprite = new Sprite(texture);
+          bgSprite.width = BASE_W;
+          bgSprite.height = BASE_H;
+          bgLayer.addChildAt(bgSprite, 0);
+        }
+      }).catch(e => {
+        console.error("Error loading battle background texture:", e);
+      });
+    } catch (e) {
+      console.error("Error drawing battle background:", e);
+    }
   }
 
   function updateHUD() {
@@ -493,19 +638,28 @@ const BG_COLOR = 0x050508;
     document.getElementById('hud-clock-fill').style.width = `${ratio * 100}%`;
     document.getElementById('hud-clock-text').textContent = `${combatEngine.currentClock}/${combatEngine.clockMax}`;
 
+    let passiveText = '---';
     if (combatEngine.characterData && combatEngine.characterData.passive) {
       const passive = combatEngine.characterData.passive;
       if (passive.trigger === 'berserkVampire') {
         const bStr = combatEngine.getBerserkStrength();
-        document.getElementById('hud-passive').textContent = `${passive.name} (STR +${bStr})`;
+        passiveText = `${passive.name} (STR +${bStr})`;
+      } else if (passive.trigger === 'onSkillCardEvery2') {
+        const count = combatEngine.hexSkillCount || 0;
+        passiveText = `${passive.name} (STR +${combatEngine.playerStrength}) [${count}/2]`;
       } else if (passive.maxStacks === Infinity) {
-        document.getElementById('hud-passive').textContent = `${passive.name}`;
+        passiveText = `${passive.name}`;
       } else {
-        document.getElementById('hud-passive').textContent = `${passive.name} (${combatEngine.passiveStacks}/${passive.maxStacks})`;
+        passiveText = `${passive.name} (${combatEngine.passiveStacks}/${passive.maxStacks})`;
       }
-    } else {
-      document.getElementById('hud-passive').textContent = '---';
     }
+    if (combatEngine.activeAugments && combatEngine.activeAugments.length > 0) {
+      const augText = combatEngine.activeAugments.map(a => `[${a.icon} ${a.name}]`).join(' ');
+      passiveText += ` | ${augText}`;
+    } else if (combatEngine.activeAugment) {
+      passiveText += ` | [${combatEngine.activeAugment.icon} ${combatEngine.activeAugment.name}]`;
+    }
+    document.getElementById('hud-passive').textContent = passiveText;
 
     document.getElementById('deck-count').textContent = deckManager.drawPile.length;
     document.getElementById('discard-count').textContent = deckManager.discardPile.length;
@@ -551,30 +705,45 @@ const BG_COLOR = 0x050508;
   // ══════════════════════════════════════════════
   // 分岐マップ生成 & 描画 (ルート制限付き)
   // ══════════════════════════════════════════════
+  // ══════════════════════════════════════════════
+  // 分岐マップ生成 & 描画 (ランダムプロシージャル分岐)
+  // ══════════════════════════════════════════════
   function generateMap() {
     mapGrid = [];
 
-    // エリア(currentAct)が進むほどノード数が増えてマップが複雑化！
-    // AREA 01: 2〜3ノード
-    // AREA 02: 3〜4ノード
-    // AREA 03: 4〜5ノード
-    const minNodes = currentAct === 1 ? 2 : (currentAct === 2 ? 3 : 3);
-    const maxNodes = currentAct === 1 ? 3 : (currentAct === 2 ? 4 : 5);
+    // エリア(currentAct)が進むほどノード数が増えてマップがより重層化
+    const minNodes = currentAct === 1 ? 2 : 3;
+    const maxNodes = currentAct === 1 ? 4 : 4;
 
+    // 階層1〜5の生成
     for (let d = 1; d <= 5; d++) {
       const floorNodes = [];
       let nodeCount = Math.floor(Math.random() * (maxNodes - minNodes + 1)) + minNodes;
-      if (d === 1) nodeCount = Math.min(nodeCount, 3); // スタート直後は2〜3
+      if (d === 1) nodeCount = Math.floor(Math.random() * 2) + 2; // 階層1: 2〜3個
+      if (d === 5) nodeCount = Math.floor(Math.random() * 2) + 2; // 階層5(ボス直前): 2〜3個
 
       for (let i = 0; i < nodeCount; i++) {
         let type = 'battle';
 
         if (d === 1) {
-          type = 'battle';
-        } else if (d === 3 || d === 5) {
-          type = (i === 0) ? 'shop' : (i === 1 ? 'event' : 'battle');
+          type = (Math.random() < 0.25) ? 'event' : 'battle';
+        } else if (d === 5) {
+          // ボス直前階層は必ず休息所(REST)または闇市(SHOP)
+          type = (i % 2 === 0) ? 'rest' : 'shop';
         } else {
-          type = (Math.random() < 0.45) ? 'event' : 'battle';
+          // 中間階層 (2, 3, 4): 重み付けランダム
+          const roll = Math.random();
+          if (roll < 0.35) {
+            type = 'battle';
+          } else if (roll < 0.55) {
+            type = 'elite';
+          } else if (roll < 0.75) {
+            type = 'event';
+          } else if (roll < 0.88) {
+            type = 'shop';
+          } else {
+            type = 'rest';
+          }
         }
 
         floorNodes.push({
@@ -599,30 +768,31 @@ const BG_COLOR = 0x050508;
       connections: []
     }]);
 
-    // 階層間のルート接続関係（コネクション）を割当: 直上および「すぐ真隣」のみに厳密制限
+    // 階層間の枝分かれコネクション生成 (完全ランダムかつ孤立不可のプロシージャルリンク)
     for (let f = 0; f < mapGrid.length - 1; f++) {
       const currentFloor = mapGrid[f];
       const nextFloor = mapGrid[f + 1];
 
-      currentFloor.forEach(node => {
+      // 1. 各現ノードから、次階層の対応する相対位置に1〜2本の接続を作成
+      currentFloor.forEach((node) => {
         node.connections = [];
-        
-        // 現在ノードの相対位置比率 (0.0 ～ 1.0)
         const ratio = currentFloor.length > 1 ? node.index / (currentFloor.length - 1) : 0.5;
 
-        nextFloor.forEach(nextNode => {
+        nextFloor.forEach((nextNode) => {
           const nextRatio = nextFloor.length > 1 ? nextNode.index / (nextFloor.length - 1) : 0.5;
-          // 相対位置の差が近い（＝直上およびすぐ真隣のみ）を連結
-          if (Math.abs(ratio - nextRatio) <= 0.55) {
-            node.connections.push(nextNode.index);
+          const diff = Math.abs(ratio - nextRatio);
+          if (diff <= 0.6) {
+            if (diff <= 0.35 || Math.random() < 0.5) {
+              node.connections.push(nextNode.index);
+            }
           }
         });
 
-        // 接続先保証: 最も近い隣接ノードを最低1つ確保
-        if (node.connections.length === 0 && nextFloor.length > 0) {
+        // 接続数最低1つ確保
+        if (node.connections.length === 0) {
           let closestIdx = 0;
           let minDiff = 999;
-          nextFloor.forEach(nextNode => {
+          nextFloor.forEach((nextNode) => {
             const nextRatio = nextFloor.length > 1 ? nextNode.index / (nextFloor.length - 1) : 0.5;
             const diff = Math.abs(ratio - nextRatio);
             if (diff < minDiff) {
@@ -631,6 +801,27 @@ const BG_COLOR = 0x050508;
             }
           });
           node.connections.push(closestIdx);
+        }
+      });
+
+      // 2. 次階層の全ノードに対して、前階層からの接続保証（孤立ノード防止）
+      nextFloor.forEach((nextNode) => {
+        const isConnected = currentFloor.some(node => node.connections.includes(nextNode.index));
+        if (!isConnected) {
+          const nextRatio = nextFloor.length > 1 ? nextNode.index / (nextFloor.length - 1) : 0.5;
+          let closestNode = currentFloor[0];
+          let minDiff = 999;
+          currentFloor.forEach(node => {
+            const ratio = currentFloor.length > 1 ? node.index / (currentFloor.length - 1) : 0.5;
+            const diff = Math.abs(ratio - nextRatio);
+            if (diff < minDiff) {
+              minDiff = diff;
+              closestNode = node;
+            }
+          });
+          if (!closestNode.connections.includes(nextNode.index)) {
+            closestNode.connections.push(nextNode.index);
+          }
         }
       });
     }
@@ -679,7 +870,6 @@ const BG_COLOR = 0x050508;
           } else {
             const currentNode = findNodeById(currentNodeId);
             if (currentNode && node.depth === currentDepth + 1) {
-              // 現在地に接続されているルート（connections）に含まれるノードのみ進行可能！
               if (currentNode.connections && currentNode.connections.includes(node.index)) {
                 isActive = true;
               }
@@ -693,10 +883,14 @@ const BG_COLOR = 0x050508;
           nodeEl.className = nodeClass;
 
           let icon = '⚔';
-          if (node.type === 'shop') icon = '🛒';
-          if (node.type === 'event') icon = '❓';
-          if (node.type === 'boss') icon = '💀';
-          nodeEl.innerHTML = `${icon}<span class="map-node-label">${node.type.toUpperCase()}</span>`;
+          let label = 'COMBAT';
+          if (node.type === 'elite') { icon = '⚡'; label = 'ELITE'; }
+          if (node.type === 'shop') { icon = '🛒'; label = 'MARKET'; }
+          if (node.type === 'rest') { icon = '🛠️'; label = 'REST'; }
+          if (node.type === 'event') { icon = '❓'; label = 'SIGNAL'; }
+          if (node.type === 'boss') { icon = '👑'; label = 'BOSS'; }
+
+          nodeEl.innerHTML = `${icon}<span class="map-node-label">${label}</span>`;
 
           if (isActive) {
             nodeEl.onclick = () => {
@@ -706,6 +900,10 @@ const BG_COLOR = 0x050508;
                 showScene('SHOP');
               } else if (node.type === 'event') {
                 showScene('EVENT');
+              } else if (node.type === 'rest') {
+                showScene('REST');
+              } else if (node.type === 'elite') {
+                startEliteCombat(node.id);
               } else {
                 goToCombat(node.id);
               }
@@ -922,6 +1120,54 @@ const BG_COLOR = 0x050508;
     }
     showScene('MAP');
   });
+
+  // ══════════════════════════════════════════════
+  // REST SITE (リフレッシュ＆カード強化)
+  // ══════════════════════════════════════════════
+  function openRestUI() {
+    audioManager.playSfx('click');
+
+    const btnHeal = document.getElementById('btn-rest-heal');
+    const btnUpgrade = document.getElementById('btn-rest-upgrade');
+
+    if (btnHeal) {
+      btnHeal.onclick = () => {
+        audioManager.playSfx('heal');
+        const healAmt = Math.floor(combatEngine.playerMaxHP * 0.3);
+        combatEngine.healPlayer(healAmt);
+        fx.spawnPopupText(BASE_W / 2, 400, `+${healAmt} HP RECOVERED`, 0x00FF88);
+
+        if (currentNodeId) {
+          const node = findNodeById(currentNodeId);
+          if (node) node.cleared = true;
+        }
+        setTimeout(() => showScene('MAP'), 800);
+      };
+    }
+
+    if (btnUpgrade) {
+      btnUpgrade.onclick = () => {
+        audioManager.playSfx('overclock');
+        const attackCards = deckManager.masterDeck.filter(c => c.type === 'attack');
+        if (attackCards.length > 0) {
+          const target = attackCards[Math.floor(Math.random() * attackCards.length)];
+          target.damage = (target.damage || 6) + 3;
+          target.name += '+';
+          fx.spawnPopupText(BASE_W / 2, 400, `${target.name} OVERCLOCKED (+3 DMG)`, 0xFFF000);
+        } else {
+          combatEngine.playerMaxHP += 5;
+          combatEngine.playerHP += 5;
+          fx.spawnPopupText(BASE_W / 2, 400, `MAX HP +5 ENHANCED`, 0x00F5FF);
+        }
+
+        if (currentNodeId) {
+          const node = findNodeById(currentNodeId);
+          if (node) node.cleared = true;
+        }
+        setTimeout(() => showScene('MAP'), 800);
+      };
+    }
+  }
 
   // ══════════════════════════════════════════════
   // ══════════════════════════════════════════════
@@ -1162,11 +1408,17 @@ const BG_COLOR = 0x050508;
     enemySprites = [];
 
     try { entityLayer.removeChildren(); } catch (e) {}
-    if (bgEffectsContainer && !bgEffectsContainer.destroyed) {
-      try { bgEffectsContainer.destroy({ children: true }); } catch (e) {}
-      bgEffectsContainer = null;
-    }
-    bgAnimationRunning = false;
+    try {
+      if (typeof bgEffectsContainer !== 'undefined' && bgEffectsContainer && !bgEffectsContainer.destroyed) {
+        bgEffectsContainer.destroy({ children: true });
+        bgEffectsContainer = null;
+      }
+    } catch (e) {}
+    try {
+      if (typeof bgAnimationRunning !== 'undefined') {
+        bgAnimationRunning = false;
+      }
+    } catch (e) {}
     try { bgLayer.removeChildren(); } catch (e) {}
     try { fxLayer.removeChildren(); } catch (e) {}
 
@@ -1270,6 +1522,24 @@ const BG_COLOR = 0x050508;
     }
 
     const enemiesData = spawnEnemiesForCombat(count);
+    combatEngine.startCombat(enemiesData);
+    syncHandSprites();
+    updateHUD();
+  }
+
+  function startEliteCombat(nodeId) {
+    drawBattleBackground();
+    audioManager.playSfx('boss_appear');
+
+    combatEngine.initWithCharacter(selectedCharacter);
+
+    if (playerSprite) playerSprite.destroy();
+    playerSprite = new EntitySprite('player', combatEngine);
+    playerSprite.container.x = 450;
+    playerSprite.container.y = 480;
+    entityLayer.addChild(playerSprite.container);
+
+    const enemiesData = spawnEnemiesForCombat(2, 1.5);
     combatEngine.startCombat(enemiesData);
     syncHandSprites();
     updateHUD();
@@ -1481,7 +1751,10 @@ const BG_COLOR = 0x050508;
             currentDepth = 0;
             currentNodeId = null;
             generateMap();
-            showScene('MAP');
+            const charId = selectedCharacter?.id || 'SWORDSMAN';
+            showAugmentSelectionUI(charId, () => {
+              showScene('MAP');
+            });
           } catch (e) {
             console.error("Transition click error:", e);
             showScene('MAP');
@@ -1706,16 +1979,22 @@ const BG_COLOR = 0x050508;
       return;
     }
 
-    if (combatEngine.state !== 'PLAYER_TURN' || e.pointerType === 'touch') return;
+    if (combatEngine.state !== 'PLAYER_TURN') return;
     const card = findCardAtWorld(world.x, world.y);
     if (card !== hoveredCard) {
       if (hoveredCard) hoveredCard.setHovered(false);
       hoveredCard = card;
       if (hoveredCard) hoveredCard.setHovered(true);
     }
+    if (hoveredCard && hoveredCard.data) {
+      showTooltip(hoveredCard.data.name, `${hoveredCard.data.desc}\n[COST: ${hoveredCard.data.cost} | +${hoveredCard.data.clock || 1} CLOCK]`, e.clientX, e.clientY);
+    } else if (!draggedCard) {
+      hideTooltip();
+    }
   });
 
   document.addEventListener('pointerup', (e) => {
+    hideTooltip();
     if (!draggedCard) return;
 
     const card = draggedCard;
@@ -1774,40 +2053,252 @@ const BG_COLOR = 0x050508;
   });
 
   // ══════════════════════════════════════════════
+  // 用語解説＆カードツールチップ表示システム (Mobile Touch & Desktop Hover)
+  // ══════════════════════════════════════════════
+  const tooltipBox = document.getElementById('tooltip-box');
+  const tooltipTitle = document.getElementById('tooltip-title');
+  const tooltipBody = document.getElementById('tooltip-body');
+
+  const DICTIONARY = {
+    'CLOCK': { title: 'CLOCK (クロック)', desc: 'カードプレイ時に溜まる電脳エネルギー。10に到達すると『OVERCLOCK』が自動発動！' },
+    'OVERCLOCK': { title: 'OVERCLOCK (オーバークロック)', desc: 'クロック10で起動！全カードコスト0化、または与ダメージ2倍＋吸血バフが適用されます。' },
+    'MEMORY': { title: 'MEMORY (メモリ / コスト)', desc: 'ターン毎に手札のカードを使用するために消費するエネルギー。毎ターン全回復します。' },
+    'SHIELD': { title: 'SHIELD (シールド)', desc: '敵からのダメージを優先して吸収する防護バリア。ターン開始時にリセットされます。' },
+    'VULNERABLE': { title: 'VULNERABLE (脆弱)', desc: '被ダメージが 1.5 倍に増加する危険なデバフ状態。' },
+    'BERSERK': { title: 'BERSERK (背水)', desc: 'プレイヤーの減少HPに応じて攻撃力が上昇する能力（10ダメージ減少毎にSTR +1）。' }
+  };
+
+  function showTooltip(title, desc, mouseX, mouseY) {
+    if (!tooltipBox || !title) return;
+    tooltipTitle.textContent = title;
+    tooltipBody.textContent = desc;
+    tooltipBox.style.display = 'block';
+
+    const boxWidth = 260;
+    const boxHeight = 90;
+    let x = mouseX + 15;
+    let y = mouseY + 15;
+
+    if (x + boxWidth > window.innerWidth) x = mouseX - boxWidth - 15;
+    if (y + boxHeight > window.innerHeight) y = mouseY - boxHeight - 15;
+
+    tooltipBox.style.left = `${Math.max(10, x)}px`;
+    tooltipBox.style.top = `${Math.max(10, y)}px`;
+  }
+
+  function hideTooltip() {
+    if (tooltipBox) tooltipBox.style.display = 'none';
+  }
+
+  function bindTooltip(element, termKey) {
+    const data = DICTIONARY[termKey];
+    if (!data || !element) return;
+
+    element.addEventListener('pointerenter', (e) => {
+      showTooltip(data.title, data.desc, e.clientX, e.clientY);
+    });
+    element.addEventListener('pointermove', (e) => {
+      showTooltip(data.title, data.desc, e.clientX, e.clientY);
+    });
+    element.addEventListener('pointerleave', hideTooltip);
+
+    element.addEventListener('touchstart', (e) => {
+      if (e.touches && e.touches[0]) {
+        showTooltip(data.title, data.desc, e.touches[0].clientX, e.touches[0].clientY);
+      }
+    }, { passive: true });
+    element.addEventListener('touchend', () => {
+      setTimeout(hideTooltip, 1200);
+    });
+  }
+
+  // HUD要素へツールチップを接続
+  bindTooltip(document.getElementById('hud-clock-bar'), 'CLOCK');
+  bindTooltip(document.getElementById('hud-memory'), 'MEMORY');
+  bindTooltip(document.getElementById('hud-hp'), 'VULNERABLE');
+  bindTooltip(document.getElementById('hud-passive'), 'BERSERK');
+
+  // ══════════════════════════════════════════════
   // UIボタン＆キーバインディングの登録
   // ══════════════════════════════════════════════
+  document.addEventListener('pointerdown', () => {
+    audioManager.startBgm();
+  }, { once: true });
+
   document.getElementById('btn-start-game').addEventListener('click', () => {
+    audioManager.playSfx('click');
     goToCharacterSelect();
   });
 
   window.addEventListener('keydown', (e) => {
     if (e.code === 'Enter' && currentScene === 'TITLE') {
+      audioManager.playSfx('click');
       goToCharacterSelect();
     }
   });
 
   document.getElementById('btn-back-title').addEventListener('click', () => {
+    audioManager.playSfx('click');
     goBackToTitle();
   });
 
   document.getElementById('btn-end-turn').addEventListener('click', () => {
+    audioManager.playSfx('click');
     if (combatEngine.state === 'PLAYER_TURN') {
       combatEngine.endPlayerTurn();
     }
   });
 
+  // [Space] & [1-5] キーボード操作 (PCプレイヤー用アクセシビリティ補助)
   window.addEventListener('keydown', (e) => {
-    if (e.code === 'Space' && currentScene === 'COMBAT') {
-      e.preventDefault();
-      if (combatEngine.state === 'PLAYER_TURN') {
-        combatEngine.endPlayerTurn();
+    if (currentScene === 'COMBAT') {
+      if (e.code === 'Space') {
+        e.preventDefault();
+        if (combatEngine.state === 'PLAYER_TURN') {
+          audioManager.playSfx('click');
+          combatEngine.endPlayerTurn();
+        }
+      } else if (combatEngine.state === 'PLAYER_TURN') {
+        const cardKeys = ['Digit1', 'Digit2', 'Digit3', 'Digit4', 'Digit5'];
+        const keyIdx = cardKeys.indexOf(e.code);
+        if (keyIdx !== -1 && cardSprites[keyIdx]) {
+          const sprite = cardSprites[keyIdx];
+          if (sprite.core) {
+            combatEngine.playCard(sprite.core);
+          }
+        }
       }
     }
   });
 
   document.getElementById('btn-restart').addEventListener('click', () => {
+    audioManager.playSfx('click');
     returnToTitle();
   });
+
+  // ══════════════════════════════════════════════
+  // オプション (OPTIONS) & 音量設定イベント
+  // ══════════════════════════════════════════════
+  const optionsOverlay = document.getElementById('options-overlay');
+  const confirmTitleOverlay = document.getElementById('confirm-title-overlay');
+
+  const sliderMaster = document.getElementById('slider-master-volume');
+  const sliderBgm = document.getElementById('slider-bgm-volume');
+  const sliderSfx = document.getElementById('slider-sfx-volume');
+
+  const valMaster = document.getElementById('val-master-volume');
+  const valBgm = document.getElementById('val-bgm-volume');
+  const valSfx = document.getElementById('val-sfx-volume');
+
+  // 初期値の同期
+  if (sliderMaster && valMaster) {
+    const mVal = Math.round(audioManager.masterVolume * 100);
+    sliderMaster.value = mVal;
+    valMaster.textContent = `${mVal}%`;
+    sliderMaster.oninput = (e) => {
+      const v = parseInt(e.target.value, 10);
+      valMaster.textContent = `${v}%`;
+      audioManager.setMasterVolume(v / 100);
+    };
+  }
+
+  if (sliderBgm && valBgm) {
+    const bVal = Math.round(audioManager.bgmVolume * 100);
+    sliderBgm.value = bVal;
+    valBgm.textContent = `${bVal}%`;
+    sliderBgm.oninput = (e) => {
+      const v = parseInt(e.target.value, 10);
+      valBgm.textContent = `${v}%`;
+      audioManager.setBgmVolume(v / 100);
+    };
+  }
+
+  if (sliderSfx && valSfx) {
+    const sVal = Math.round(audioManager.sfxVolume * 100);
+    sliderSfx.value = sVal;
+    valSfx.textContent = `${sVal}%`;
+    sliderSfx.oninput = (e) => {
+      const v = parseInt(e.target.value, 10);
+      valSfx.textContent = `${v}%`;
+      audioManager.setSfxVolume(v / 100);
+    };
+  }
+
+  // 音色試聴＆ミュート
+  const btnTestSfx = document.getElementById('btn-test-sfx');
+  if (btnTestSfx) {
+    btnTestSfx.onclick = () => {
+      audioManager.playSfx('card_play');
+    };
+  }
+
+  const btnToggleMute = document.getElementById('btn-toggle-mute');
+  if (btnToggleMute) {
+    btnToggleMute.onclick = () => {
+      const muted = audioManager.toggleMute();
+      btnToggleMute.textContent = muted ? "🔊 UNMUTE AUDIO" : "🔇 MUTE AUDIO";
+    };
+  }
+
+  // オプションダイアログの表示／非表示
+  function openOptionsModal() {
+    audioManager.playSfx('click');
+    if (optionsOverlay) optionsOverlay.style.display = 'flex';
+  }
+
+  function closeOptionsModal() {
+    audioManager.playSfx('click');
+    if (optionsOverlay) optionsOverlay.style.display = 'none';
+  }
+
+  ['btn-open-options-title', 'btn-open-options-char', 'btn-open-options-map', 'btn-open-options-hud', 'btn-open-options-shop', 'btn-open-options-event', 'btn-open-options-rest'].forEach(id => {
+    const btn = document.getElementById(id);
+    if (btn) btn.onclick = openOptionsModal;
+  });
+
+  const btnCloseOptions = document.getElementById('btn-close-options');
+  if (btnCloseOptions) btnCloseOptions.onclick = closeOptionsModal;
+
+  // タイトルへ戻る確認ダイアログの制御
+  function openConfirmTitleModal() {
+    audioManager.playSfx('click');
+    if (confirmTitleOverlay) confirmTitleOverlay.style.display = 'flex';
+  }
+
+  function closeConfirmTitleModal() {
+    audioManager.playSfx('click');
+    if (confirmTitleOverlay) confirmTitleOverlay.style.display = 'none';
+  }
+
+  ['btn-open-title-map', 'btn-open-title-hud'].forEach(id => {
+    const btn = document.getElementById(id);
+    if (btn) btn.onclick = openConfirmTitleModal;
+  });
+
+  const btnOptionsReturnTitle = document.getElementById('btn-options-return-title');
+  if (btnOptionsReturnTitle) {
+    btnOptionsReturnTitle.onclick = () => {
+      closeOptionsModal();
+      if (currentScene === 'TITLE') {
+        goBackToTitle();
+      } else {
+        openConfirmTitleModal();
+      }
+    };
+  }
+
+  const btnConfirmReturnTitle = document.getElementById('btn-confirm-return-title');
+  if (btnConfirmReturnTitle) {
+    btnConfirmReturnTitle.onclick = () => {
+      closeConfirmTitleModal();
+      returnToTitle();
+    };
+  }
+
+  const btnCancelReturnTitle = document.getElementById('btn-cancel-return-title');
+  if (btnCancelReturnTitle) {
+    btnCancelReturnTitle.onclick = closeConfirmTitleModal;
+  }
 
   // 初期画面表示
   showScene('TITLE');

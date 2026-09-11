@@ -48,13 +48,32 @@ export class CombatEngine {
     this.onCardPlay = null;
     this.onCardDraw = null;
     this.onPassiveTrigger = null; // パッシブ発動時
+    this.activeAugments = [];
+  }
+
+  /** オーグメント所持チェック */
+  hasAugment(id) {
+    if (Array.isArray(this.activeAugments)) {
+      return this.activeAugments.some(a => a.id === id);
+    }
+    return this.activeAugment?.id === id;
+  }
+
+  /** オーグメント追加 */
+  addAugment(aug) {
+    if (!this.activeAugments) this.activeAugments = [];
+    if (!this.hasAugment(aug.id)) {
+      this.activeAugments.push(aug);
+    }
+    this.activeAugment = aug; // 互換性保持
   }
 
   /** 減少HPに応じたボーナス攻撃力を取得する */
   getBerserkStrength() {
     if (this.characterData && this.characterData.passive && this.characterData.passive.trigger === 'berserkVampire') {
       const missingHP = Math.max(0, this.playerMaxHP - this.playerHP);
-      return Math.floor(missingHP / 10);
+      const mult = this.hasAugment('BLOODLUST_OVERLOAD') ? 2 : 1;
+      return Math.floor((missingHP / 10) * mult);
     }
     return 0;
   }
@@ -66,6 +85,7 @@ export class CombatEngine {
     this.playerHP = characterData.maxHP;
     this.round = 1;
     this.passiveStacks = 0;
+    this.hexSkillCount = 0;
   }
 
   /** フルリセット（タイトルに戻る時） */
@@ -89,6 +109,20 @@ export class CombatEngine {
     this.state = 'PREP';
     this.characterData = null;
     this.passiveStacks = 0;
+    this.activeAugment = null;
+    this.activeAugments = [];
+    this.hexSkillCount = 0;
+  }
+
+  /** 敵に感染(DoT)を付与する */
+  addInfection(amount, targetEnemy = null) {
+    if (!targetEnemy) {
+      const alive = this.enemies.filter(e => e.hp > 0);
+      if (alive.length > 0) targetEnemy = alive[0];
+      else return;
+    }
+    targetEnemy.infection = (targetEnemy.infection || 0) + amount;
+    if (this.onEnemyDamage) this.onEnemyDamage(0, targetEnemy);
   }
 
   /** 戦闘を開始する。引数に敵インスタンスの配列を受け取る */
@@ -106,8 +140,14 @@ export class CombatEngine {
     this.isOverclock = false;
     this.isOverclockPending = false;
     this.passiveStacks = 0; // パッシブカウンタリセット
+    this.hexSkillCount = 0;
     this.deckManager.setupStartingDeck();
     
+    // HERO AUGMENT: TOXIC_OUTBREAK (付与: 感染 +5)
+    if (this.hasAugment('TOXIC_OUTBREAK')) {
+      this.enemies.filter(e => e.hp > 0).forEach(e => this.addInfection(5, e));
+    }
+
     this.state = 'PLAYER_TURN';
     this.startPlayerTurn();
     if (this.onStateChange) this.onStateChange(this.state);
@@ -117,6 +157,12 @@ export class CombatEngine {
   startPlayerTurn() {
     this.state = 'PLAYER_TURN';
     this.turnDamageDealt = 0;
+
+    // HERO AUGMENT: BERSERK_REGENERATION (HP <= 50% で HP +4 ＆ STR +1)
+    if (this.hasAugment('BERSERK_REGENERATION') && this.playerHP <= this.playerMaxHP * 0.5) {
+      this.healPlayer(4);
+      this.playerStrength += 1;
+    }
     
     // 遅延シールドの獲得
     this.playerShield = 0;
@@ -140,9 +186,21 @@ export class CombatEngine {
       this.isOverclock = true;
       this.isOverclockPending = false;
       showOverclockActivation = true;
+
+      // HERO AUGMENT: OVERCLOCK_RELOAD (2ドロー)
+      if (this.hasAugment('OVERCLOCK_RELOAD')) {
+        this.deckManager.drawCard(2, (card) => {
+          if (this.onCardDraw) this.onCardDraw(card);
+        });
+      }
+      // HERO AUGMENT: VIRAL_OVERCLOCK (全敵の感染値を2倍)
+      if (this.hasAugment('VIRAL_OVERCLOCK')) {
+        this.enemies.filter(e => e.hp > 0).forEach(e => e.infection = (e.infection || 0) * 2);
+      }
     }
 
-    this.memory = this.maxMemory;
+    // HERO AUGMENT: MANA_OVERFLOW (最大メモリ+1)
+    this.memory = this.hasAugment('MANA_OVERFLOW') ? this.maxMemory + 1 : this.maxMemory;
     
     // 脆弱状態のデバフのカウントダウン
     if (this.playerVulnerable > 0) {
@@ -150,7 +208,15 @@ export class CombatEngine {
     }
     
     // ドロー枚数決定（オーバークロック起動時は追加ドローして爆発力を上げる）
-    const drawCount = showOverclockActivation ? 7 : 5;
+    let drawCount = showOverclockActivation ? 7 : 5;
+    if (this.hasAugment('MANA_OVERFLOW')) {
+      drawCount += 1;
+    }
+    if (this.playerNextTurnDraw > 0) {
+      drawCount += this.playerNextTurnDraw;
+      this.playerNextTurnDraw = 0;
+    }
+
     this.deckManager.drawCard(drawCount, (card) => {
       if (this.onCardDraw) this.onCardDraw(card);
     });
@@ -186,6 +252,12 @@ export class CombatEngine {
     
     this.playerHP = Math.max(0, this.playerHP - amount);
     if (this.onPlayerDamage) this.onPlayerDamage(amount);
+
+    // COUNTER_PARRY 反撃ドロー
+    if (amount > 0 && this.playerParryDraw) {
+      this.playerParryDraw = false;
+      this.deckManager.drawCard(2, (c) => { if (this.onCardDraw) this.onCardDraw(c); });
+    }
     
     // 被弾時：スパイク（トゲ）による反射ダメージ（攻撃元の敵に対して反射）
     if (amount > 0 && this.playerSpikes > 0 && sourceEnemy && sourceEnemy.hp > 0) {
@@ -276,11 +348,24 @@ export class CombatEngine {
       case 'onSkillCardPlayed':
         shouldTrigger = cardInstance.type === 'skill';
         break;
+      case 'onSkillCardEvery2':
+        if (cardInstance.type === 'skill') {
+          this.hexSkillCount = (this.hexSkillCount || 0) + 1;
+          const reqCount = this.hasAugment('CASCADE_COMPILER') ? 1 : 2;
+          if (this.hexSkillCount >= reqCount) {
+            this.hexSkillCount = 0;
+            shouldTrigger = true;
+          }
+        }
+        break;
       case 'onBuffCardPlayed':
         shouldTrigger = cardInstance.type === 'buff';
         break;
       case 'onSkillOrBuffPlayed':
         shouldTrigger = cardInstance.type === 'skill' || cardInstance.type === 'buff';
+        break;
+      case 'onSkillOrAttackPlayed':
+        shouldTrigger = cardInstance.type === 'skill' || cardInstance.type === 'attack';
         break;
     }
     
@@ -291,12 +376,20 @@ export class CombatEngine {
       switch (passive.effect.type) {
         case 'addStrength':
           this.playerStrength += passive.effect.value;
+          // HERO AUGMENT: ARCANE_SHIELDING (STR上昇時 シールド+6)
+          if (this.hasAugment('ARCANE_SHIELDING')) {
+            this.playerShield += 6;
+          }
           break;
         case 'addClock':
           this.addClock(passive.effect.value);
           break;
         case 'addShield':
           this.playerShield += passive.effect.value;
+          break;
+        case 'addInfection':
+          const alive = this.enemies.filter(e => e.hp > 0);
+          alive.forEach(e => this.addInfection(passive.effect.value, e));
           break;
       }
       
@@ -336,7 +429,46 @@ export class CombatEngine {
 
     // doubleEffectまたはvampiricBurstタイプの場合はカード効果・ダメージ倍率を2倍にする
     const isDouble = this.characterData?.overclockType === 'doubleEffect' || this.characterData?.overclockType === 'vampiricBurst';
-    const mult = (this.isOverclock && isDouble) ? 2 : 1;
+    const isOvercompiling = this.hasAugment('OVERCOMPILING');
+    const mult = (this.isOverclock && isDouble) ? (isOvercompiling ? 4 : 2) : 1;
+
+    // HERO AUGMENT: ARCANE_CASCADE
+    if (this.hasAugment('ARCANE_CASCADE') && (card.type === 'skill' || card.type === 'buff')) {
+      this.playerShield += 4;
+      this.addClock(1);
+    }
+
+    // HERO AUGMENT: MANA_RECYCLER
+    if (this.hasAugment('MANA_RECYCLER') && Math.random() < 0.5) {
+      this.memory = Math.min(this.maxMemory, this.memory + 1);
+    }
+
+    // HERO AUGMENT: NANO_BLADE_REFLEX (攻撃カード時 シールド+3 ＆ クロック+1)
+    if (this.hasAugment('NANO_BLADE_REFLEX') && card.type === 'attack') {
+      this.playerShield += 3;
+      this.addClock(1);
+    }
+
+    // HERO AUGMENT: SPELL_ACCELERATOR (スキル時 手札の全魔法スペルコスト -1)
+    if (this.hasAugment('SPELL_ACCELERATOR') && card.type === 'skill') {
+      this.deckManager.hand.filter(c => c.class === 'MAGE' && c.type === 'attack').forEach(c => {
+        c.cost = Math.max(0, c.cost - 1);
+      });
+    }
+
+    // HERO AUGMENT: BIO_SHIELD_SYNERGY (感染付与時 シールド+3)
+    if (this.hasAugment('BIO_SHIELD_SYNERGY') && (card.infection || card.id === 'BIO_POISON')) {
+      this.playerShield += 3;
+    }
+
+    // HERO AUGMENT: DUAL_BLADE_SURGE (50%で連動発動)
+    if (this.hasAugment('DUAL_BLADE_SURGE') && card.type === 'attack' && !card._isSurge) {
+      if (Math.random() < 0.5) {
+        setTimeout(() => {
+          this.applyCardEffect({ ...card, _isSurge: true }, targetEnemy);
+        }, 200);
+      }
+    }
 
     switch (card.id) {
       case 'STRIKE':
@@ -344,6 +476,33 @@ export class CombatEngine {
         break;
       case 'DEFEND':
         this.playerShield += card.value * mult;
+        break;
+      case 'VIRUS_STRIKE':
+        this.damageEnemy(card.value * mult, targetEnemy);
+        if (targetEnemy) this.addInfection((card.infection || 3) * mult, targetEnemy);
+        break;
+      case 'BIO_POISON':
+        this.enemies.filter(e => e.hp > 0).forEach(e => {
+          this.addInfection((card.infection || 5) * mult, e);
+        });
+        break;
+      case 'CONTAGION_BURST':
+        this.damageEnemy(card.value * mult, targetEnemy);
+        if (targetEnemy && targetEnemy.infection) {
+          const burstRate = this.hasAugment('CONTAGION_ACCELERATOR') ? 2.2 : 1.5;
+          targetEnemy.infection = Math.floor(targetEnemy.infection * burstRate);
+        }
+        break;
+      case 'TOXIC_BARRIER':
+        this.playerShield += (card.value || 6) * mult;
+        this.playerSpikes += 2 * mult;
+        break;
+      case 'NEURO_TOXIN':
+        this.damageEnemy(card.value * mult, targetEnemy);
+        if (targetEnemy) {
+          this.addInfection((card.infection || 4) * mult, targetEnemy);
+          targetEnemy.vulnerable = (targetEnemy.vulnerable || 0) + 2;
+        }
         break;
       case 'OVERCLOCK':
         this.deckManager.drawCard(1 * mult, (c) => {
@@ -499,6 +658,131 @@ export class CombatEngine {
         this.playerShield += (12 * mult);
         this.healPlayer(8 * mult);
         break;
+
+      // ── 新規 SWORDSMAN カード効果 ──
+      case 'PHANTOM_SLASH':
+        this.damageEnemy(card.value * mult, targetEnemy);
+        break;
+      case 'COUNTER_PARRY':
+        this.playerShield += card.value * mult;
+        this.playerParryDraw = true;
+        break;
+      case 'BERSERK_DRIVE':
+        this.damagePlayer(5);
+        this.playerStrength += card.value * mult;
+        this.playerTempStrength += card.value * mult;
+        break;
+      case 'EXECUTION_BLADE':
+        {
+          const isLow = targetEnemy && targetEnemy.hp <= targetEnemy.maxHp * 0.5;
+          const dmg = isLow ? 28 : 16;
+          this.damageEnemy(dmg * mult, targetEnemy);
+        }
+        break;
+      case 'TITAN_SHIELD':
+        this.playerShield += card.value * mult;
+        break;
+
+      // ── 新規 MAGE カード効果 ──
+      case 'MAGIC_MISSILE':
+        this.damageEnemy(card.value * mult, targetEnemy);
+        setTimeout(() => {
+          if (targetEnemy && targetEnemy.hp > 0) {
+            this.damageEnemy(card.value * mult, targetEnemy);
+          }
+        }, 160);
+        break;
+      case 'ICE_BARRIER':
+        this.playerShield += card.value * mult;
+        if (targetEnemy) targetEnemy.vulnerable = (targetEnemy.vulnerable || 0) + (1 * mult);
+        break;
+      case 'ARCANE_SPELL_BOOK':
+        {
+          const spells = [CARD_DEFS.FIRE_BALL, CARD_DEFS.LIGHTNING_BOLT, CARD_DEFS.CHAIN_LIGHTNING, CARD_DEFS.ARCANE_BURST];
+          const chosen = { ...spells[Math.floor(Math.random() * spells.length)], cost: 0, instanceId: `created_${Date.now()}` };
+          this.deckManager.hand.push(chosen);
+        }
+        break;
+      case 'THUNDER_STORM':
+        {
+          const alive = this.enemies.filter(e => e.hp > 0);
+          alive.forEach(e => {
+            this.damageEnemy(card.value * mult, e);
+            e.strength = Math.max(0, e.strength - (2 * mult));
+          });
+        }
+        break;
+      case 'CHRONO_BREAK':
+        this.addClock(5 * mult);
+        this.deckManager.drawCard(3 * mult, (c) => {
+          if (this.onCardDraw) this.onCardDraw(c);
+        });
+        break;
+
+      // ── 新規 VIRUS カード効果 ──
+      case 'BIO_HAZARD':
+        {
+          const bonus = targetEnemy?.infection || 0;
+          this.damageEnemy((card.value + bonus) * mult, targetEnemy);
+        }
+        break;
+      case 'CORROSIVE_GAS':
+        {
+          const alive = this.enemies.filter(e => e.hp > 0);
+          alive.forEach(e => {
+            e.shield = Math.max(0, e.shield - (10 * mult));
+            this.addInfection((card.infection || 4) * mult, e);
+          });
+        }
+        break;
+      case 'VIRAL_CLONE':
+        if (targetEnemy && targetEnemy.infection > 0) {
+          const inf = targetEnemy.infection;
+          this.enemies.filter(e => e.hp > 0 && e !== targetEnemy).forEach(e => {
+            this.addInfection(inf * mult, e);
+          });
+        }
+        break;
+      case 'PLAGUE_BOMB':
+        {
+          const alive = this.enemies.filter(e => e.hp > 0);
+          alive.forEach(e => {
+            this.damageEnemy(card.value * mult, e);
+            this.addInfection((card.infection || 8) * mult, e);
+          });
+        }
+        break;
+      case 'MUTATION_SHIELD':
+        {
+          const totalInfection = this.enemies.reduce((sum, e) => sum + (e.infection || 0), 0);
+          this.playerShield += (card.value + totalInfection) * mult;
+        }
+        break;
+
+      // ── 新規 NEUTRAL カード効果 ──
+      case 'DATA_DRAIN':
+        if (targetEnemy && targetEnemy.shield > 0) {
+          const stolen = Math.min(targetEnemy.shield, card.value * mult);
+          targetEnemy.shield -= stolen;
+          this.playerShield += stolen;
+        }
+        break;
+      case 'ENERGY_PACK':
+        this.memory += (1 * mult);
+        this.deckManager.exhaustCard(card);
+        break;
+      case 'CYBER_HASTER':
+        this.playerNextTurnDraw = (this.playerNextTurnDraw || 0) + (2 * mult);
+        break;
+      case 'DEEP_SCAN':
+        this.deckManager.drawCard(2 * mult, (c) => {
+          if (this.onCardDraw) this.onCardDraw(c);
+        });
+        setTimeout(() => {
+          const sorted = [...this.deckManager.hand].sort((a, b) => b.cost - a.cost);
+          if (sorted.length > 0) sorted[0].cost = Math.max(0, sorted[0].cost - 1);
+        }, 200);
+        break;
     }
   }
 
@@ -513,6 +797,19 @@ export class CombatEngine {
 
     // プレイヤーのStrength ＆ 減少HPボーナスStrengthを加算
     amount += this.playerStrength + this.getBerserkStrength();
+
+    // HERO AUGMENT: ARMOR_PIERCER (シールド50%貫通)
+    if (this.hasAugment('ARMOR_PIERCER') && targetEnemy.shield > 0) {
+      const bypassDmg = Math.floor(amount * 0.5);
+      targetEnemy.hp = Math.max(0, targetEnemy.hp - bypassDmg);
+      amount = Math.max(0, amount - bypassDmg);
+    }
+
+    // HERO AUGMENT: ELEMENTAL_BURST (脆弱時 +50% 与ダメージ)
+    if (this.hasAugment('ELEMENTAL_BURST') && targetEnemy.vulnerable > 0) {
+      amount = Math.floor(amount * 1.5);
+    }
+
     // 敵の脆弱(Vulnerable)による被ダメージ1.5倍
     if (targetEnemy.vulnerable > 0) {
       amount = Math.floor(amount * 1.5);
@@ -522,6 +819,11 @@ export class CombatEngine {
     
     // そのターンの累積与ダメージに加算
     this.turnDamageDealt += amount;
+
+    // HERO AUGMENT: SPELL_DRAIN (魔法ダメージの25%をシールド変換)
+    if (this.hasAugment('SPELL_DRAIN') && this.characterData?.id === 'MAGE') {
+      this.playerShield += Math.floor(amount * 0.25);
+    }
 
     // コールバック通知（どの敵にダメージを与えたか targetEnemy も引き渡す）
     if (this.onEnemyDamage) this.onEnemyDamage(amount, targetEnemy);
@@ -533,18 +835,77 @@ export class CombatEngine {
     }
   }
 
+  /** 感染(DoT)ダメージ処理 (敵ターン終了時) */
+  processInfectionDoT() {
+    const alive = this.enemies.filter(e => e.hp > 0);
+    let totalInfectionDamage = 0;
+
+    alive.forEach(enemy => {
+      if (enemy.infection && enemy.infection > 0) {
+        const dotDamage = enemy.infection;
+        totalInfectionDamage += dotDamage;
+
+        // HERO AUGMENT: ACIDIC_CORROSION (bypasses shield directly)
+        const isBypass = this.hasAugment('ACIDIC_CORROSION');
+        if (isBypass) {
+          enemy.hp = Math.max(0, enemy.hp - dotDamage);
+        } else {
+          enemy.takeDamage(dotDamage);
+        }
+
+        // HERO AUGMENT: EVERLASTING_DECAY (減衰せず +1 自動増殖)
+        if (this.hasAugment('EVERLASTING_DECAY')) {
+          enemy.infection += 1;
+        } else {
+          enemy.infection = Math.max(0, enemy.infection - 1);
+        }
+
+        if (this.onEnemyDamage) {
+          this.onEnemyDamage(dotDamage, enemy);
+        }
+
+        // HERO AUGMENT: EPIDEMIC_CARRIER (spreads infection to other alive enemies)
+        if (this.hasAugment('EPIDEMIC_CARRIER')) {
+          const others = alive.filter(other => other !== enemy && other.hp > 0);
+          others.forEach(other => {
+            other.infection = (other.infection || 0) + Math.ceil(dotDamage * 0.5);
+          });
+        }
+
+        // HERO AUGMENT: NEURO_PARALYSIS (感染5以上で敵攻撃力 -3)
+        if (this.hasAugment('NEURO_PARALYSIS') && enemy.infection >= 5) {
+          enemy.strength = Math.max(0, enemy.strength - 3);
+        }
+      }
+    });
+
+    // HERO AUGMENT: BIO_REGENESIS (heals 30% of total DoT damage)
+    if (this.hasAugment('BIO_REGENESIS') && totalInfectionDamage > 0) {
+      const bioHeal = Math.floor(totalInfectionDamage * 0.3);
+      if (bioHeal > 0) {
+        this.healPlayer(bioHeal);
+      }
+    }
+  }
+
   /** プレイヤーのターンを終了し、敵のターンに移行する */
   endPlayerTurn() {
     if (this.state !== 'PLAYER_TURN') return;
     
-    // 剣士パッシブ: オーバークロック中のみ、そのターンに与えたダメージの30%分HP回復
+    // 剣士パッシブ: 吸血回復 (HERO AUGMENT: VAMPIRIC_FRENZY 60%吸血)
     if (this.characterData && this.characterData.passive && this.characterData.passive.trigger === 'berserkVampire' && this.turnDamageDealt > 0) {
       if (this.isOverclock) {
-        const vampHeal = Math.floor(this.turnDamageDealt * 0.30);
+        const rate = this.hasAugment('VAMPIRIC_FRENZY') ? 0.60 : 0.30;
+        const vampHeal = Math.floor(this.turnDamageDealt * rate);
         if (vampHeal > 0) {
+          const oldHP = this.playerHP;
           this.healPlayer(vampHeal);
-          if (this.onPassiveTrigger) {
-            this.onPassiveTrigger(this.characterData.passive, vampHeal);
+          // 超過回復のシールド変換
+          if (this.hasAugment('VAMPIRIC_FRENZY')) {
+            const overflow = (oldHP + vampHeal) - this.playerMaxHP;
+            if (overflow > 0) {
+              this.playerShield += overflow;
+            }
           }
         }
       }
@@ -553,20 +914,15 @@ export class CombatEngine {
     this.state = 'ENEMY_TURN';
     if (this.onStateChange) this.onStateChange(this.state);
     
-    // 一時的な攻撃力(Temp STR)の減衰
     if (this.playerTempStrength > 0) {
       this.playerStrength = Math.max(0, this.playerStrength - this.playerTempStrength);
       this.playerTempStrength = 0;
     }
 
-    // 手札を捨て札へ
     this.deckManager.discardHand();
     
-    // 生存している敵全員が順に行動を行う（シーケンシャル処理）
     const aliveEnemies = this.enemies.filter(e => e.hp > 0);
-    
     if (aliveEnemies.length === 0) {
-      // 敵がいないなら即プレイヤーのターン
       this.startPlayerTurn();
       return;
     }
@@ -578,22 +934,20 @@ export class CombatEngine {
       if (enemyIndex < aliveEnemies.length) {
         const currentEnemy = aliveEnemies[enemyIndex];
         currentEnemy.startTurn();
-        
-        // プレイヤーに攻撃（攻撃元の敵自身を渡す）
         currentEnemy.executeAction(this, this);
         
         enemyIndex++;
-        // 1体の敵の行動演出完了を待って次の敵の行動へ (1秒ディレイ)
         setTimeout(executeNextEnemy, 1000);
       } else {
-        // 全員行動完了後、プレイヤーのターンを開始
+        // 敵のターン終了時に感染(DoT)ダメージを処理！
+        this.processInfectionDoT();
+
         if (this.playerHP > 0 && this.state !== 'COMBAT_END') {
           this.startPlayerTurn();
         }
       }
     };
 
-    // 敵のターン開始から最初の攻撃まで少し待つ
     setTimeout(executeNextEnemy, 800);
   }
 

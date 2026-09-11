@@ -17,7 +17,7 @@ export const CHARACTER_DEFS = [
     color: 0x00F5FF,
     accentColor: 0xFF007A,
     icon: 'sword',
-    avatarUrl: '/assets/blade_avatar.png',
+    avatarUrl: '/assets/anime_blade.png',
     overclockType: 'vampiricBurst',
 
     // 初期デッキ: 攻撃寄りの構成
@@ -44,12 +44,12 @@ export const CHARACTER_DEFS = [
     id: 'MAGE',
     name: 'HEX.EXE',
     title: 'スペル・コンパイラ',
-    description: 'スキルまたはバフカードを使用するたびにCLOCK+1を得る。\nスペル（プログラム）の高速展開を得意とする魔導ハッカー。',
+    description: 'スキルカードを2枚使用するごとに永続的に魔力(STR)+1を獲得。\nクロック10到達時：そのターン発動する全カードの効果が2倍に倍増！',
     maxHP: 70,
     color: 0xA855F7,
     accentColor: 0xE9D5FF,
     icon: 'staff',
-    avatarUrl: '/assets/hex_avatar.png',
+    avatarUrl: '/assets/anime_hex.png',
     overclockType: 'doubleEffect',
 
     // 初期デッキ: 魔法寄りの構成
@@ -64,17 +64,53 @@ export const CHARACTER_DEFS = [
 
     // パッシブ能力
     passive: {
-      id: 'SPELL_BOOST',
-      name: 'スペルブースト',
-      description: 'スキル・バフカード使用時にCLOCK+1追加',
-      trigger: 'onSkillOrBuffPlayed',
+      id: 'MANA_COMPILE',
+      name: '魔法コンパイル',
+      description: 'スキルカードを2枚使用するたび魔力(STR)+1獲得',
+      trigger: 'onSkillCardEvery2',
       maxStacks: Infinity,
       effect: {
-        type: 'addClock',
+        type: 'addStrength',
         value: 1
       }
     }
+  },
+  {
+    id: 'VIRUS',
+    name: 'VIRUS.EXE',
+    title: 'バイオ・ハッカー',
+    description: 'スキルや攻撃カードを使用するたび敵に「感染 (DoT)」を与える。\n敵ターン終了時に感染値ぶんの直接ダメージ（シールド貫通）が継続発生！',
+    maxHP: 75,
+    color: 0x00FF66,
+    accentColor: 0x84CC16,
+    icon: 'circuit',
+    avatarUrl: '/assets/anime_virus.png',
+    overclockType: 'infectionBurst',
+
+    // 初期デッキ: 毒・感染寄りの構成
+    startingDeck: [
+      'VIRUS_STRIKE', 'VIRUS_STRIKE', 'VIRUS_STRIKE',
+      'DEFEND', 'DEFEND', 'DEFEND',
+      'BIO_POISON',
+      'CONTAGION_BURST',
+      'TOXIC_BARRIER',
+      'NEURO_TOXIN'
+    ],
+
+    // パッシブ能力
+    passive: {
+      id: 'CORROSIVE_INFECT',
+      name: '腐食感染',
+      description: '攻撃・スキル使用時に敵へ感染(DoT)+2付与',
+      trigger: 'onSkillOrAttackPlayed',
+      maxStacks: Infinity,
+      effect: {
+        type: 'addInfection',
+        value: 2
+      }
+    }
   }
+];
 
   // ── 将来のキャラクター追加例 ──
   // {
@@ -102,7 +138,6 @@ export const CHARACTER_DEFS = [
   //     effect: { type: 'addClock', value: 1 }
   //   }
   // }
-];
 
 /**
  * IDでキャラクターを検索する

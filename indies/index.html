@@ -33,9 +33,14 @@
         <span class="deco-diamond"></span>
         <span class="deco-line"></span>
       </div>
-      <button id="btn-start-game" class="btn-neon btn-start pulse-glow">
-        <span class="btn-icon">▶</span> JACK IN
-      </button>
+      <div class="title-button-group">
+        <button id="btn-start-game" class="btn-neon btn-start pulse-glow">
+          <span class="btn-icon">▶</span> JACK IN
+        </button>
+        <button id="btn-open-options-title" class="btn-neon btn-options-sm">
+          ⚙ OPTIONS
+        </button>
+      </div>
       <p class="title-hint">[ PRESS ENTER OR CLICK TO START ]</p>
     </div>
     <!-- 背景装飾ライン -->
@@ -58,9 +63,14 @@
         <!-- JSでここにキャラカードが動的生成される -->
       </div>
 
-      <button id="btn-back-title" class="btn-neon btn-back">
-        ← BACK
-      </button>
+      <div class="charselect-footer-btns">
+        <button id="btn-back-title" class="btn-neon btn-back">
+          ← BACK
+        </button>
+        <button id="btn-open-options-char" class="btn-neon btn-options-sm">
+          ⚙ OPTIONS
+        </button>
+      </div>
     </div>
   </div>
 
@@ -100,9 +110,17 @@
         <span id="hud-passive" class="value passive-text">---</span>
       </div>
       <div class="stat-divider"></div>
-      <button id="btn-force-map" class="btn-neon" style="font-size: 10px; padding: 4px 10px; border-color: #00F5FF; color: #00F5FF; background: rgba(0,245,255,0.15);">
-        RETURN TO MAP ▶
-      </button>
+      <div class="hud-action-btns">
+        <button id="btn-open-options-hud" class="btn-neon btn-hud-icon" title="設定 (OPTIONS)">
+          ⚙
+        </button>
+        <button id="btn-open-title-hud" class="btn-neon btn-hud-icon danger-border-subtle" title="タイトルへ戻る">
+          🏠
+        </button>
+        <button id="btn-force-map" class="btn-neon" style="font-size: 10px; padding: 4px 10px; border-color: #00F5FF; color: #00F5FF; background: rgba(0,245,255,0.15);">
+          MAP ▶
+        </button>
+      </div>
     </div>
 
     <!-- Battle Banner (Glitch alert for Overclock, Victory/Defeat) -->
@@ -133,7 +151,13 @@
   <!-- ═══════════════════════════════════════════ -->
   <div id="map-screen" class="map-screen" style="display: none;">
     <div class="map-header">
-      <div class="map-title glitch-anim" data-text="CYBER GRID MAP">CYBER GRID MAP</div>
+      <div class="map-header-top">
+        <div class="map-title glitch-anim" data-text="CYBER GRID MAP">CYBER GRID MAP</div>
+        <div class="header-action-group">
+          <button id="btn-open-options-map" class="btn-neon btn-header-action">⚙ OPTIONS</button>
+          <button id="btn-open-title-map" class="btn-neon btn-header-action danger-border-subtle">🏠 TITLE</button>
+        </div>
+      </div>
       <p class="map-subtitle">アクセスする電脳ノードを選択してください（現在の階層: <span id="map-depth-text">1</span>/6）</p>
     </div>
     <div id="map-nodes-container" class="map-nodes-container">
@@ -153,7 +177,10 @@
   <div id="shop-screen" class="shop-screen" style="display: none;">
     <div class="shop-container glass">
       <div class="shop-header">
-        <div class="shop-title glitch-anim" data-text="BLACK MARKET TERMINAL">BLACK MARKET TERMINAL</div>
+        <div class="shop-header-top">
+          <div class="shop-title glitch-anim" data-text="BLACK MARKET TERMINAL">BLACK MARKET TERMINAL</div>
+          <button id="btn-open-options-shop" class="btn-neon btn-header-action">⚙ OPTIONS</button>
+        </div>
         <p class="shop-subtitle">蓄積したクレジットでコードを復元または最適化します</p>
       </div>
       <div class="shop-body">
@@ -198,7 +225,10 @@
   <div id="event-screen" class="event-screen" style="display: none;">
     <div class="event-container glass">
       <div class="event-header">
-        <div id="event-title" class="event-title glitch-anim" data-text="UNSTABLE TERMINAL">UNSTABLE TERMINAL</div>
+        <div class="event-header-top">
+          <div id="event-title" class="event-title glitch-anim" data-text="UNSTABLE TERMINAL">UNSTABLE TERMINAL</div>
+          <button id="btn-open-options-event" class="btn-neon btn-header-action">⚙ OPTIONS</button>
+        </div>
         <div class="event-art font-mono">&lt;ACCESS_GRANTED&gt;<br>SYSTEM_STATE: CRITICAL</div>
       </div>
       <p id="event-description" class="event-description">
@@ -206,6 +236,48 @@
       </p>
       <div id="event-options-container" class="event-options-container">
         <!-- 選択肢ボタン -->
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════ -->
+  <!-- CYBER REST SITE SCREEN                      -->
+  <!-- ═══════════════════════════════════════════ -->
+  <div id="rest-screen" class="rest-screen" style="display: none;">
+    <div class="rest-container glass">
+      <div class="rest-header">
+        <div class="rest-header-top">
+          <div class="rest-title glitch-anim" data-text="REST & REBOOT TERMINAL">REST & REBOOT TERMINAL</div>
+          <button id="btn-open-options-rest" class="btn-neon btn-header-action">⚙ OPTIONS</button>
+        </div>
+        <p class="rest-subtitle">システム端末にアクセスして体力を復元するかカードを強化します</p>
+      </div>
+      <div class="rest-options-grid">
+        <div id="btn-rest-heal" class="rest-card-option glass">
+          <div class="rest-icon">⚡</div>
+          <h3>SYSTEM REBOOT</h3>
+          <p>プレイヤーのHPを 30%（最大HPに応じて）回復します。</p>
+          <span class="rest-badge">+30% HP RECOVERY</span>
+        </div>
+        <div id="btn-rest-upgrade" class="rest-card-option glass">
+          <div class="rest-icon">🔮</div>
+          <h3>OVERCLOCK CODE</h3>
+          <p>所持カード1枚を最適化（攻撃力・効果の恒久強化）します。</p>
+          <span class="rest-badge">ENHANCE CARD</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════ -->
+  <!-- CYBER HERO AUGMENT SELECTION OVERLAY        -->
+  <!-- ═══════════════════════════════════════════ -->
+  <div id="augment-overlay" class="augment-overlay glass-modal-overlay" style="display: none; z-index: 20000;">
+    <div class="augment-container glass">
+      <div class="glitch-title" data-text="HERO PROTOCOL AUGMENTS">HERO PROTOCOL AUGMENTS</div>
+      <p class="augment-subtitle">プロトコル専用のヒーロー・オーグメント（パッシブ能力）を1つ選択してください</p>
+      <div id="augment-cards-container" class="augment-cards-container">
+        <!-- JS動的生成 -->
       </div>
     </div>
   </div>
@@ -247,6 +319,96 @@
         PROCEED TO NEXT AREA ▶
       </button>
     </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════ -->
+  <!-- SYSTEM OPTIONS MODAL                        -->
+  <!-- ═══════════════════════════════════════════ -->
+  <div id="options-overlay" class="glass-modal-overlay" style="display: none; z-index: 20000;">
+    <div class="options-modal-container glass">
+      <div class="options-modal-header">
+        <h2 class="glitch-title" data-text="SYSTEM CONFIGURATION">SYSTEM CONFIGURATION</h2>
+        <p class="options-subtitle">音量レベルおよびゲーム操作の設定を行えます</p>
+      </div>
+
+      <div class="options-body">
+        <!-- Master Volume Slider -->
+        <div class="slider-group">
+          <div class="slider-label-row">
+            <span class="slider-label">🔊 MASTER VOLUME (全体音量)</span>
+            <span id="val-master-volume" class="slider-val-badge font-mono">80%</span>
+          </div>
+          <input type="range" id="slider-master-volume" class="neon-slider" min="0" max="100" value="80" />
+        </div>
+
+        <!-- BGM Volume Slider -->
+        <div class="slider-group">
+          <div class="slider-label-row">
+            <span class="slider-label">🎵 BGM VOLUME (背景音楽)</span>
+            <span id="val-bgm-volume" class="slider-val-badge font-mono">60%</span>
+          </div>
+          <input type="range" id="slider-bgm-volume" class="neon-slider" min="0" max="100" value="60" />
+        </div>
+
+        <!-- SFX Volume Slider -->
+        <div class="slider-group">
+          <div class="slider-label-row">
+            <span class="slider-label">⚡ SFX VOLUME (効果音)</span>
+            <span id="val-sfx-volume" class="slider-val-badge font-mono">70%</span>
+          </div>
+          <input type="range" id="slider-sfx-volume" class="neon-slider" min="0" max="100" value="70" />
+        </div>
+
+        <!-- Utility Audio Actions -->
+        <div class="audio-util-row">
+          <button id="btn-test-sfx" class="btn-neon btn-sm-subtle">
+            🔊 TEST SOUND (試聴)
+          </button>
+          <button id="btn-toggle-mute" class="btn-neon btn-sm-subtle">
+            🔇 MUTE AUDIO
+          </button>
+        </div>
+
+        <div class="options-divider"></div>
+
+        <!-- System Action Buttons -->
+        <div class="options-actions-row">
+          <button id="btn-options-return-title" class="btn-neon danger-border btn-options-action">
+            🏠 TITLE (タイトルに戻る)
+          </button>
+          <button id="btn-close-options" class="btn-neon btn-options-action pulse-glow">
+            ✖ CLOSE (閉じる)
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════ -->
+  <!-- TITLE RETURN CONFIRM MODAL                  -->
+  <!-- ═══════════════════════════════════════════ -->
+  <div id="confirm-title-overlay" class="glass-modal-overlay" style="display: none; z-index: 25000;">
+    <div class="confirm-modal-container glass">
+      <h3 class="glitch-title danger-text" data-text="ABORT RUN?">ABORT RUN?</h3>
+      <p class="confirm-desc">
+        タイトル画面に戻りますか？<br>
+        <span style="color: #FF007A; font-weight: bold;">※現在のセッション進行状況はリセットされます。</span>
+      </p>
+      <div class="confirm-btns-row">
+        <button id="btn-confirm-return-title" class="btn-neon danger-border">
+          RETURN TO TITLE
+        </button>
+        <button id="btn-cancel-return-title" class="btn-neon">
+          CANCEL
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- FLOATING CYBER TOOLTIP BOX (Mobile & Desktop Tooltip) -->
+  <div id="tooltip-box" class="cyber-tooltip-box glass" style="display: none;">
+    <div id="tooltip-title" class="tooltip-title">TOOLTIP TITLE</div>
+    <div id="tooltip-body" class="tooltip-body">Tooltip explanation content...</div>
   </div>
 
   <script type="module" src="/src/main.js"></script>

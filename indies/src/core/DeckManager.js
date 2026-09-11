@@ -171,7 +171,7 @@ export const CARD_DEFS = {
     class: 'MAGE',
     value: 5,
     clock: 2,
-    desc: '敵に5ダメージを与える\nCLOCK +2'
+    desc: '敵に5(+魔力)ダメージを与える\nCLOCK +2'
   },
   MANA_SHIELD: {
     id: 'MANA_SHIELD',
@@ -179,9 +179,9 @@ export const CARD_DEFS = {
     cost: 1,
     type: 'skill',
     class: 'MAGE',
-    value: 4,
+    value: 5,
     clock: 2,
-    desc: 'シールドを4得る\nCLOCK +2'
+    desc: 'シールドを5得る\nCLOCK +2'
   },
   LIGHTNING_BOLT: {
     id: 'LIGHTNING_BOLT',
@@ -191,7 +191,7 @@ export const CARD_DEFS = {
     class: 'MAGE',
     value: 7,
     clock: 3,
-    desc: '敵に7ダメージを与える\nCLOCK +3'
+    desc: '敵に7(+魔力)ダメージを与える\nCLOCK +3'
   },
   MANA_REGEN: {
     id: 'MANA_REGEN',
@@ -211,7 +211,7 @@ export const CARD_DEFS = {
     class: 'MAGE',
     value: 12,
     clock: 2,
-    desc: '敵に12ダメージを与える\n敵に脆弱 1を付与\nCLOCK +2'
+    desc: '敵に12(+魔力)ダメージを与える\n敵に脆弱 1を付与\nCLOCK +2'
   },
   ARCANE_BURST: {
     id: 'ARCANE_BURST',
@@ -221,7 +221,7 @@ export const CARD_DEFS = {
     class: 'MAGE',
     value: 24,
     clock: 3,
-    desc: '敵に24ダメージを与える\nCLOCK +3'
+    desc: '敵に24(+魔力)ダメージを与える\nCLOCK +3'
   },
   AETHER_BARRIER: {
     id: 'AETHER_BARRIER',
@@ -261,7 +261,7 @@ export const CARD_DEFS = {
     class: 'MAGE',
     value: 10,
     clock: 3,
-    desc: '敵全体に10ダメージを与える\nCLOCK +3'
+    desc: '敵全体に10(+魔力)ダメージを与える\nCLOCK +3'
   },
   SUPERNOVA: {
     id: 'SUPERNOVA',
@@ -271,7 +271,7 @@ export const CARD_DEFS = {
     class: 'MAGE',
     value: 18,
     clock: 4,
-    desc: '敵全体に18ダメージを与える\nCLOCK +4'
+    desc: '敵全体に18(+魔力)ダメージを与える\nCLOCK +4'
   },
   EMP_WAVE: {
     id: 'EMP_WAVE',
@@ -279,9 +279,66 @@ export const CARD_DEFS = {
     cost: 1,
     type: 'attack',
     class: 'NEUTRAL',
-    value: 4,
+    value: 7,
     clock: 2,
-    desc: '敵全体に4ダメージを与える\n敵全体のSTR -1\nCLOCK +2'
+    desc: '敵全体に7ダメージを与える\n敵全体に脆弱 1を付与\nCLOCK +2'
+  },
+
+  // ══════════════════════════════════════════════
+  // VIRUS (バイオハッカー) 専用カード群
+  // ══════════════════════════════════════════════
+  VIRUS_STRIKE: {
+    id: 'VIRUS_STRIKE',
+    name: 'VIRUS STRIKE',
+    cost: 1,
+    type: 'attack',
+    class: 'VIRUS',
+    value: 4,
+    infection: 3,
+    clock: 1,
+    desc: '敵に4ダメージを与える\n感染(DoT) +3を付与\nCLOCK +1'
+  },
+  BIO_POISON: {
+    id: 'BIO_POISON',
+    name: 'BIO POISON',
+    cost: 1,
+    type: 'skill',
+    class: 'VIRUS',
+    value: 0,
+    infection: 5,
+    clock: 1,
+    desc: '敵全体に感染(DoT) +5を散布する\nCLOCK +1'
+  },
+  CONTAGION_BURST: {
+    id: 'CONTAGION_BURST',
+    name: 'CONTAGION BURST',
+    cost: 2,
+    type: 'attack',
+    class: 'VIRUS',
+    value: 8,
+    clock: 2,
+    desc: '敵に8ダメージを与える\n対象の感染値を1.5倍に爆発増幅\nCLOCK +2'
+  },
+  TOXIC_BARRIER: {
+    id: 'TOXIC_BARRIER',
+    name: 'TOXIC BARRIER',
+    cost: 1,
+    type: 'skill',
+    class: 'VIRUS',
+    value: 6,
+    clock: 1,
+    desc: 'シールドを6得て、攻撃した敵に感染 +2を反撃付与\nCLOCK +1'
+  },
+  NEURO_TOXIN: {
+    id: 'NEURO_TOXIN',
+    name: 'NEURO TOXIN',
+    cost: 2,
+    type: 'attack',
+    class: 'VIRUS',
+    value: 12,
+    infection: 4,
+    clock: 2,
+    desc: '敵に12ダメージを与え、感染 +4 ＆ 脆弱 2を付与\nCLOCK +2'
   },
   SYSTEM_RESTORE: {
     id: 'SYSTEM_RESTORE',
@@ -312,6 +369,206 @@ export const CARD_DEFS = {
     value: 12,
     clock: 2,
     desc: 'シールドを12得る\nHPを8回復する\nCLOCK +2'
+  },
+
+  // ── 新規追加 SWORDSMAN カード ──
+  PHANTOM_SLASH: {
+    id: 'PHANTOM_SLASH',
+    name: 'PHANTOM SLASH',
+    cost: 0,
+    type: 'attack',
+    class: 'SWORDSMAN',
+    value: 4,
+    clock: 1,
+    desc: '敵に4(+STR)ダメージを与える\n残像剣撃\nCLOCK +1'
+  },
+  COUNTER_PARRY: {
+    id: 'COUNTER_PARRY',
+    name: 'COUNTER PARRY',
+    cost: 1,
+    type: 'skill',
+    class: 'SWORDSMAN',
+    value: 7,
+    clock: 1,
+    desc: 'シールドを7獲得する\n被ダメージ時2ドロー\nCLOCK +1'
+  },
+  BERSERK_DRIVE: {
+    id: 'BERSERK_DRIVE',
+    name: 'BERSERK DRIVE',
+    cost: 1,
+    type: 'buff',
+    class: 'SWORDSMAN',
+    value: 6,
+    clock: 2,
+    desc: 'HPを5自傷し、このターンのみSTR +6を獲得\nCLOCK +2'
+  },
+  EXECUTION_BLADE: {
+    id: 'EXECUTION_BLADE',
+    name: 'EXECUTION BLD',
+    cost: 2,
+    type: 'attack',
+    class: 'SWORDSMAN',
+    value: 16,
+    clock: 2,
+    desc: '敵に16(+STR)ダメージ\n対象のHP50%以下なら28(+STR)ダメージ\nCLOCK +2'
+  },
+  TITAN_SHIELD: {
+    id: 'TITAN_SHIELD',
+    name: 'TITAN SHIELD',
+    cost: 3,
+    type: 'skill',
+    class: 'SWORDSMAN',
+    value: 25,
+    clock: 3,
+    desc: 'シールドを25獲得する\n重装防壁\nCLOCK +3'
+  },
+
+  // ── 新規追加 MAGE カード ──
+  MAGIC_MISSILE: {
+    id: 'MAGIC_MISSILE',
+    name: 'MAGIC MISSILE',
+    cost: 1,
+    type: 'attack',
+    class: 'MAGE',
+    value: 3,
+    clock: 2,
+    desc: '敵に3(+魔力)ダメージを2回連続で与える\nCLOCK +2'
+  },
+  ICE_BARRIER: {
+    id: 'ICE_BARRIER',
+    name: 'ICE BARRIER',
+    cost: 1,
+    type: 'skill',
+    class: 'MAGE',
+    value: 6,
+    clock: 2,
+    desc: 'シールドを6得て、敵に脆弱 1を付与\nCLOCK +2'
+  },
+  ARCANE_SPELL_BOOK: {
+    id: 'ARCANE_SPELL_BOOK',
+    name: 'SPELL BOOK',
+    cost: 1,
+    type: 'skill',
+    class: 'MAGE',
+    value: 0,
+    clock: 2,
+    desc: 'ランダムな攻撃スペルを1枚生成しコスト0にする\nCLOCK +2'
+  },
+  THUNDER_STORM: {
+    id: 'THUNDER_STORM',
+    name: 'THUNDER STORM',
+    cost: 2,
+    type: 'attack',
+    class: 'MAGE',
+    value: 12,
+    clock: 3,
+    desc: '敵全体に12(+魔力)ダメージ ＋ 敵全体の攻撃力 -2\nCLOCK +3'
+  },
+  CHRONO_BREAK: {
+    id: 'CHRONO_BREAK',
+    name: 'CHRONO BREAK',
+    cost: 3,
+    type: 'skill',
+    class: 'MAGE',
+    value: 0,
+    clock: 5,
+    desc: 'CLOCK +5 をチャージし、カードを 3 枚引く\nCLOCK +5'
+  },
+
+  // ── 新規追加 VIRUS カード ──
+  BIO_HAZARD: {
+    id: 'BIO_HAZARD',
+    name: 'BIO HAZARD',
+    cost: 1,
+    type: 'attack',
+    class: 'VIRUS',
+    value: 6,
+    clock: 1,
+    desc: '敵に6(+STR)ダメージ ＋ 対象の感染(DoT)値ぶん追加Dmg\nCLOCK +1'
+  },
+  CORROSIVE_GAS: {
+    id: 'CORROSIVE_GAS',
+    name: 'CORROSIVE GAS',
+    cost: 2,
+    type: 'skill',
+    class: 'VIRUS',
+    value: 0,
+    infection: 4,
+    clock: 2,
+    desc: '敵全体のシールドを10破壊し、感染(DoT) +4 を散布\nCLOCK +2'
+  },
+  VIRAL_CLONE: {
+    id: 'VIRAL_CLONE',
+    name: 'VIRAL CLONE',
+    cost: 1,
+    type: 'skill',
+    class: 'VIRUS',
+    value: 0,
+    clock: 1,
+    desc: '対象の感染値を他の生きている全敵へコピー感染\nCLOCK +1'
+  },
+  PLAGUE_BOMB: {
+    id: 'PLAGUE_BOMB',
+    name: 'PLAGUE BOMB',
+    cost: 3,
+    type: 'attack',
+    class: 'VIRUS',
+    value: 10,
+    infection: 8,
+    clock: 3,
+    desc: '敵全体に10(+STR)ダメージ ＋ 感染(DoT) +8 を超散布\nCLOCK +3'
+  },
+  MUTATION_SHIELD: {
+    id: 'MUTATION_SHIELD',
+    name: 'MUTATE SHIELD',
+    cost: 2,
+    type: 'skill',
+    class: 'VIRUS',
+    value: 10,
+    clock: 2,
+    desc: 'シールドを 10 ＋ [全敵の感染値合計] 獲得\nCLOCK +2'
+  },
+
+  // ── 新規追加 NEUTRAL カード ──
+  DATA_DRAIN: {
+    id: 'DATA_DRAIN',
+    name: 'DATA DRAIN',
+    cost: 1,
+    type: 'skill',
+    class: 'NEUTRAL',
+    value: 8,
+    clock: 1,
+    desc: '敵のシールドを 8 奪い取り自分のシールドにする\nCLOCK +1'
+  },
+  ENERGY_PACK: {
+    id: 'ENERGY_PACK',
+    name: 'ENERGY PACK',
+    cost: 0,
+    type: 'skill',
+    class: 'NEUTRAL',
+    value: 1,
+    clock: 1,
+    desc: 'メモリ(コスト)を 1 獲得する\n(使用後、除外される / CLOCK +1)'
+  },
+  CYBER_HASTER: {
+    id: 'CYBER_HASTER',
+    name: 'CYBER HASTER',
+    cost: 1,
+    type: 'skill',
+    class: 'NEUTRAL',
+    value: 2,
+    clock: 1,
+    desc: '次ターンのドロー枚数を +2 枚増強する\nCLOCK +1'
+  },
+  DEEP_SCAN: {
+    id: 'DEEP_SCAN',
+    name: 'DEEP SCAN',
+    cost: 1,
+    type: 'skill',
+    class: 'NEUTRAL',
+    value: 2,
+    clock: 2,
+    desc: 'カードを 2 枚引き、コストが最も高いカードのコスト -1\nCLOCK +2'
   }
 };
 
