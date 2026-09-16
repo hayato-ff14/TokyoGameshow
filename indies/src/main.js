@@ -902,8 +902,6 @@ const BG_COLOR = 0x050508;
                 showScene('EVENT');
               } else if (node.type === 'rest') {
                 showScene('REST');
-              } else if (node.type === 'elite') {
-                startEliteCombat(node.id);
               } else {
                 goToCombat(node.id);
               }
@@ -1438,7 +1436,7 @@ const BG_COLOR = 0x050508;
     });
   }
 
-  function spawnEnemiesForCombat(count) {
+  function spawnEnemiesForCombat(count, eliteMultiplier = 1.0) {
     enemySprites.forEach(s => s.destroy());
     enemySprites = [];
 
@@ -1446,7 +1444,7 @@ const BG_COLOR = 0x050508;
     const actHpScale = 1.0 + (currentAct - 1) * 0.40;  // AREA 01: 1.0, AREA 02: 1.4, AREA 03: 1.8
     const actDmgScale = 1.0 + (currentAct - 1) * 0.30; // AREA 01: 1.0, AREA 02: 1.3, AREA 03: 1.6
 
-    const depthScale = (1.0 + (currentDepth - 1) * 0.20) * actHpScale;
+    const depthScale = (1.0 + (currentDepth - 1) * 0.20) * actHpScale * eliteMultiplier;
     const enemiesData = [];
 
     let positions = [];
@@ -1466,7 +1464,7 @@ const BG_COLOR = 0x050508;
       if (count === 2) {
         hpMult = 0.7;
         powerMult = 0.7;
-        name = `VIRUS.BUG_${String.fromCharCode(65 + i)}`;
+        name = eliteMultiplier > 1.0 ? `ELITE.BUG_${String.fromCharCode(65 + i)}` : `VIRUS.BUG_${String.fromCharCode(65 + i)}`;
       } else if (count === 3) {
         if (i === 0) {
           hpMult = 0.7;
@@ -1483,7 +1481,7 @@ const BG_COLOR = 0x050508;
       const hp = Math.max(15, Math.floor(baseHp * hpMult));
 
       const enemy = new EnemyAI(name, hp, `enemy_${Date.now()}_${i}`);
-      const actionScale = (1.0 + (currentDepth - 1) * 0.12) * powerMult * actDmgScale;
+      const actionScale = (1.0 + (currentDepth - 1) * 0.12) * powerMult * actDmgScale * (eliteMultiplier > 1.0 ? 1.3 : 1.0);
 
       enemy.actionCycle = enemy.actionCycle.map(action => ({
         ...action,
@@ -1528,6 +1526,7 @@ const BG_COLOR = 0x050508;
   }
 
   function startEliteCombat(nodeId) {
+    showScene('COMBAT');
     drawBattleBackground();
     audioManager.playSfx('boss_appear');
 
@@ -1539,7 +1538,7 @@ const BG_COLOR = 0x050508;
     playerSprite.container.y = 480;
     entityLayer.addChild(playerSprite.container);
 
-    const enemiesData = spawnEnemiesForCombat(2, 1.5);
+    const enemiesData = spawnEnemiesForCombat(2, 1.4);
     combatEngine.startCombat(enemiesData);
     syncHandSprites();
     updateHUD();
