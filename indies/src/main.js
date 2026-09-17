@@ -1502,6 +1502,7 @@ const BG_COLOR = 0x050508;
   }
 
   function startNormalCombat() {
+    showScene('COMBAT');
     drawBattleBackground();
 
     combatEngine.initWithCharacter(selectedCharacter);
@@ -1545,6 +1546,7 @@ const BG_COLOR = 0x050508;
   }
 
   function startBossCombat() {
+    showScene('COMBAT');
     drawBattleBackground();
 
     combatEngine.initWithCharacter(selectedCharacter);
